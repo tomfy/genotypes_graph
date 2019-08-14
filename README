@@ -1,0 +1,1 @@
+Classes implementing a graph, and nodes representing genotypes to (hopefully) allow efficiently searching for the genotype in the graph which is most similar to another genotype.
