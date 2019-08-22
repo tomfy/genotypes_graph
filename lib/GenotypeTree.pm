@@ -44,7 +44,8 @@ sub add_genotype{
 
 sub as_string{
    my $self = shift;
-   my $string = $self->root()->as_string_recursive();
+my $leaves_only = shift // 0;
+   my $string = $self->root()->as_string_recursive($leaves_only);
    return $string;
 }
 

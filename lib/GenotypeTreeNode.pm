@@ -58,8 +58,7 @@ sub add_child{            #
       $self->children()->{$g} = $child_node;
    } else {
       $child_node = $self->children()->{$g};
-      my @ids_array = push @{$child_node->ids()}, $id;
-      $child_node->ids( \@ids_array );
+        push @{$child_node->ids()}, $id;
    }
    $child_node->inc_counter();
    return $child_node;
@@ -67,26 +66,29 @@ sub add_child{            #
 
 sub as_string{
    my $self = shift;
+   my $leaves_only = shift;
    my $string = '';
-
    my @child_gs = keys  %{$self->children()};
-   $string .= 'depth: ' . $self->depth() . '  ';
-   $string .= 'count: ' . $self->count() . '  ';
-   $string .= 'ids: ' . join(',', @{$self->ids()}) . '  ';
-   $string .= 'genotype: ' . $self->genotype() . '  ';
-   $string .= 'children: ' . join(' ', @child_gs) . "\n";
+   if ( (scalar @child_gs == 0) or (!$leaves_only) ) {
+      $string .= 'depth: ' . $self->depth() . '  ';
+      $string .= 'count: ' . $self->count() . '  ';
+      $string .= 'ids: ' . join(',', @{$self->ids()}) . '  ';
+      $string .= 'genotype: ' . $self->genotype() . '  ';
+      $string .= 'children: ' . join(' ', @child_gs) . "\n";
+   }
    return $string;
 }
 
 sub as_string_recursive{
    my $self = shift;
-   my $string = $self->as_string();
+   my $leaves_only = shift;
+   my $string = $self->as_string($leaves_only);
    my @gs = sort keys %{$self->children()};
    print "child genotypes: ", join('  ', @gs), "\n"; 
    for my $g (@gs) {
       my $child_node = $self->children()->{$g};
       print "g: $g ", $child_node->genotype(), "  depths: ", $self->depth(), "  ", $child_node->depth(), "\n";
-      $string .= $child_node->as_string_recursive();
+      $string .= $child_node->as_string_recursive($leaves_only);
    }
    return $string;
 }
