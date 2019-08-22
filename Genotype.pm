@@ -19,17 +19,11 @@ has id => (
            required => 1,
           );
 
-has sequence => (
-                 isa => 'ArrayRef', # e.g. [0,1,1,1,0,2,1,1,2,3,1,1,0,1,0,3,2];
-                 is => 'ro',
-                 required => 1,
-                );
-
 has generation => (
                    isa => 'Int',
                    is => 'ro',
                    default => sub { undef },
-                   );
+                  );
 
 has pedigree => (
                  isa => 'Str',
@@ -37,27 +31,37 @@ has pedigree => (
                  default => sub { undef },
                 );
 
+has sequence => (
+                 isa => 'ArrayRef', # e.g. [0,1,1,1,0,2,1,1,2,3,1,1,0,1,0,3,2];
+                 is => 'ro',
+                 required => 1,
+                );
+
 around BUILDARGS => sub {
    my $orig = shift;
    my $class = shift;
 
-   if (@_ == 1  and  (!ref $_[0]) ) { # argument should be string with >id generation pedigree \n sequence.
-      my $arg = $_[0];
-    #  print "XXXXX: $arg \n";
-      my ($idline, $sequence_string) = split(/\n/, $arg);
-      my ($id, $generation, $pedigree) = (undef, undef, undef);
-      if ($idline =~ /^>(\S+)\s+(\d+)\s+(\S+)\s*$/x) {
-         ($id, $generation, $pedigree) = ($1, $2, $3);
-      } elsif ($idline =~ /^ > (\S+) /x) {
-         $id = $1;
+   if (@_ == 1) {
+      if (!ref $_[0]) { # argument should be string with >id generation pedigree \n sequence.
+         my $arg = $_[0];
+         print "XXXXX: $arg \n";
+         my ($idline, $sequence_string) = split(/\n/, $arg);
+         my ($id, $generation, $pedigree) = (undef, undef, undef);
+         if ($idline =~ /^>(\S+)\s+(\d+)\s+(\S+)\s*$/x) {
+            ($id, $generation, $pedigree) = ($1, $2, $3);
+         } elsif ($idline =~ /^ > (\S+) /x) {
+            $id = $1;
+         } else {
+            die "in Genotype BUILDARGS argument $arg does not have expected >id format.\n";
+         }
+         $sequence_string =~ s/\s+//gx;
+         my @sequence_array = split(//, $sequence_string);
+         return {id => $id, sequence => \@sequence_array, generation => $generation, pedigree => $pedigree};
       } else {
-         die "in Genotype BUILDARGS argument $arg does not have expected >id format.\n";
+         return $_[0];          # should be hash ref of arguments
       }
-      $sequence_string =~ s/\s+//gx;
-      my @sequence_array = split(//, $sequence_string);
-      return {id => $id, sequence => \@sequence_array, generation => $generation, pedigree => $pedigree};
    }
-   # otherwise, don't modify arguments, should be array ref with id, genotype, and optionally pedigree
+   # otherwise, don't modify arguments, should be array ref with id, sequence, and optionally generation and pedigree
 };
 
 
@@ -97,7 +101,7 @@ sub distance{ # calculate distance between this genotype obj. and another
 sub mean{
    my $self = shift;
    my $other_genotype = shift;
-   my $this_gt = $self->sequence();         # array ref of 0,1,2,3
+   my $this_gt = $self->sequence();            # array ref of 0,1,2,3
    my $other_gt = $other_genotype->sequence(); # array ref of 0,1,2,3
    my @mean_gt = ();
    if (scalar @$this_gt == scalar @$other_gt) { # check that lengths are equal
