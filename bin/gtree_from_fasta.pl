@@ -6,6 +6,7 @@ use List::Util qw (min max sum);
 use Getopt::Long;
 use lib '/home/tomfy/Orthologger/lib/';
 use TomfyMisc qw ' fasta2seqon1line ';
+no warnings 'recursion';
 
 use File::Basename 'dirname';
 use Cwd 'abs_path';
@@ -24,8 +25,10 @@ use Genotype;
 
 {                               ###########
    my $input_filename = undef;  # input fasta file name.
+   my $show_all = 0; # false -> output info on only the leaf nodes.
    GetOptions(
               'input_filename=s' => \$input_filename,
+              'show_all!' => \$show_all,
              );
 
    my $input_filename_stem = $input_filename;
@@ -63,7 +66,6 @@ use Genotype;
             my ($id, $generation, $pedigree) = ($1, $2, $3);
             my $sequence = shift @fasta_lines;
             $sequence =~ s/\s+//g;
-            print "XXX:  $id  $generation  $pedigree \n", "$sequence\n";
             $sequence_length = length $sequence if(!defined $sequence_length);
             die "Sequence lengths must all be the same.\n" if(length $sequence != $sequence_length);
             my @sequence_array = split('', $sequence);
@@ -85,6 +87,8 @@ use Genotype;
       $gtree->add_genotype($gobj);
    }
 
-   print "\n\n[", $gtree->as_string(1), "]\n";
+   print "\n", $gtree->as_string(!$show_all), "\n";
+
+   print "\n", $gtree->as_newick(), "\n";
 
 }                               # end main
