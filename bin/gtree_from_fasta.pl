@@ -25,10 +25,14 @@ use Genotype;
 
 {                               ###########
    my $input_filename = undef;  # input fasta file name.
-   my $show_all = 0; # false -> output info on only the leaf nodes.
+   my $show_all = 0;    # false -> output info on only the leaf nodes.
+   my $compact = 1;
+my $use_s = 1;
    GetOptions(
               'input_filename=s' => \$input_filename,
               'show_all!' => \$show_all,
+              'compact_tree!' => \$compact,
+              'use_s!' => \$use_s,
              );
 
    my $input_filename_stem = $input_filename;
@@ -57,7 +61,7 @@ use Genotype;
    my $sequence_length = undef;
    if ($input_filename =~ /\.fasta$/) {
       my @fasta_lines = split ("\n", TomfyMisc::fasta2seqon1line($input_string));
-
+  #    $input_string = undef;
       while (@fasta_lines) {
          my $line = shift @fasta_lines;
          #    print $line;
@@ -68,15 +72,14 @@ use Genotype;
             $sequence =~ s/\s+//g;
             $sequence_length = length $sequence if(!defined $sequence_length);
             die "Sequence lengths must all be the same.\n" if(length $sequence != $sequence_length);
-            my @sequence_array = split('', $sequence);
+            #  my @sequence_array = split('', $sequence);
             push @genotype_objects, Genotype->new(
                                                   { id => $id,
                                                     generation => $generation,
                                                     pedigree => $pedigree,
-                                                    sequence => \@sequence_array }
+                                                    sequence => $sequence }
                                                  );
          }
-
       }
    } else {
       die "Input file must be fasta format. \n";
@@ -84,11 +87,16 @@ use Genotype;
 
    my $gtree = GenotypeTree->new( { depth => $sequence_length } );
    for my $gobj (@genotype_objects) {
-      $gtree->add_genotype($gobj);
+      if (!$compact) {
+         $gtree->add_genotype($gobj);
+      } else {
+         $gtree->add_genotype_compact($gobj, $use_s);
+         #   print "\n", $gtree->as_newick(), "\n";
+      }
    }
 
-   print "\n", $gtree->as_string(!$show_all), "\n";
-
-   print "\n", $gtree->as_newick(), "\n";
+   # print "\n", $gtree->as_string(!$show_all), "\n";
+   print $gtree->as_newick(), "\n";
 
 }                               # end main
+
