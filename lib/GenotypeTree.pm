@@ -42,9 +42,36 @@ sub add_genotype{
    return $current_node->depth() . " " . join(',', $current_node->ids());
 }
 
+sub add_genotype_compact{
+   my $self = shift;
+   my $gobj = shift;
+   my $use_s = shift;
+   my $genotype_string = $gobj->sequence(); # entire (all snps) genotype as string.
+   my $id = $gobj->id();
+   my $root = $self->root();
+
+   my $ghead = substr($genotype_string, 0, 1);
+   if (exists $root->children()->{$ghead}) {
+      my $child = $root->children()->{$ghead};
+      #  print STDERR "$genotype_string \n";
+      if ($use_s) {
+         $child->add_genotype_compact_s($id, $genotype_string);
+      } else {
+         $child->add_genotype_compact($id, $genotype_string);
+      }
+   } else {
+      my $new_node = GenotypeTreeNode->new( {parent => $root, depth => 1, 
+                                             genotype => $genotype_string, 
+                                             #  genotype_ar => @$genotype,
+                                             ids => [$id] } );
+      $root->children()->{$ghead} = $new_node;
+   }
+}
+
+
 sub as_newick{
-my $self = shift;
-return $self->root()->newick_recursive();
+   my $self = shift;
+   return $self->root()->newick_recursive();
 }
 
 sub as_string{
