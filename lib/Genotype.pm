@@ -32,9 +32,9 @@ has pedigree => (
                 );
 
 has sequence => (
-                 isa => 'ArrayRef', # e.g. [0,1,1,1,0,2,1,1,2,3,1,1,0,1,0,3,2];
-                 is => 'ro',
-                 required => 1,
+                isa => 'Str',
+                is => 'ro',
+                required => 1,
                 );
 
 around BUILDARGS => sub {
@@ -55,8 +55,8 @@ around BUILDARGS => sub {
             die "in Genotype BUILDARGS argument $arg does not have expected >id format.\n";
          }
          $sequence_string =~ s/\s+//gx;
-         my @sequence_array = split(//, $sequence_string);
-         return {id => $id, sequence => \@sequence_array, generation => $generation, pedigree => $pedigree};
+      #   my @sequence_array = split(//, $sequence_string);
+         return {id => $id, sequence => $sequence_string, generation => $generation, pedigree => $pedigree};
       } else {
          return $_[0];          # should be hash ref of arguments
       }
