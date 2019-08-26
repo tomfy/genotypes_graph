@@ -27,12 +27,12 @@ use Genotype;
    my $input_filename = undef;  # input fasta file name.
    my $show_all = 0;    # false -> output info on only the leaf nodes.
    my $compact = 1;
-my $use_s = 1;
+   my $newick_out = 1;
    GetOptions(
               'input_filename=s' => \$input_filename,
               'show_all!' => \$show_all,
               'compact_tree!' => \$compact,
-              'use_s!' => \$use_s,
+              'newick_out!' => \$newick_out,
              );
 
    my $input_filename_stem = $input_filename;
@@ -90,13 +90,12 @@ my $use_s = 1;
       if (!$compact) {
          $gtree->add_genotype($gobj);
       } else {
-         $gtree->add_genotype_compact($gobj, $use_s);
-         #   print "\n", $gtree->as_newick(), "\n";
+         $gtree->add_genotype_compact($gobj);
       }
    }
 
    # print "\n", $gtree->as_string(!$show_all), "\n";
-   print $gtree->as_newick(), "\n";
+   print $gtree->as_newick(), "\n" if($newick_out);
 
 }                               # end main
 
