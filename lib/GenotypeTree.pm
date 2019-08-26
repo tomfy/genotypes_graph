@@ -3,6 +3,7 @@ use Moose;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
+use constant MISSING_DATA => '-';
 #use Readonly;
 
 use constant BIG_NUMBER => 1_000_000_000;
@@ -59,6 +60,13 @@ sub add_genotype_compact{
                                              ids => [$id] } );
       $root->children()->{$ghead} = $new_node;
    }
+}
+
+sub search{
+   my $self = shift;
+   my $gobj = shift;
+my $root = $self->root();
+$root->search_recursive($gobj->id(), $gobj->sequence());
 }
 
 

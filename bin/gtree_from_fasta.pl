@@ -94,6 +94,10 @@ use Genotype;
       }
    }
 
+   for my $gobj (@genotype_objects){
+      $gtree->search($gobj);
+   }
+
    # print "\n", $gtree->as_string(!$show_all), "\n";
    print $gtree->as_newick(), "\n" if($newick_out);
 

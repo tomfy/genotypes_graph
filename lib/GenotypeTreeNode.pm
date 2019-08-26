@@ -3,6 +3,8 @@ use Moose;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
+use constant MISSING_DATA => '-';
+
 no warnings 'recursion';
 
 # use constant DEBUG => 0;
@@ -118,93 +120,124 @@ sub add_genotype_compact{
    }
 }
 
-
-sub newick_recursive{
+sub search_recursive{
    my $self = shift;
-   my $newick_str = '';
-
-   if (keys %{ $self->children() } ) { # not a leaf node.
-      $newick_str .= '(';
-      for my $g (0,1,2,'-') {
-         $newick_str .= ( exists $self->children()->{$g} )? $self->children()->{$g}->newick_recursive() . ',' : '';
-      }
-      $newick_str =~ s/,$//;
-      $newick_str .= 
-        #   join('-', @{$self->ids()}) . '_' .
-        #  $self->genotype() . 
-        ')' . $self->genotype() . ':1';
-   } else {                     # leaf
-      my $gstring = $self->genotype();
-      substr($gstring, 4, -4, '...') if(length $gstring > 8);
-      $newick_str .= join('-', @{$self->ids()}) . '_' . $gstring . ':1';
+   my $id2 = shift;
+   my $gt2s = shift;            # searching for this one.
+   my $gt1s = $self->genotype();
+   my ($L1, $L2) = (length $gt1s, length $gt2s);
+   my $n_equal_characters = 0;
+   for my $i (0 .. (length $gt1s) - 1) {
+      my ($g1, $g2) = (substr($gt1s, $i, 1), substr($gt2s, $i, 1));
+      last if($g1 ne MISSING_DATA  and  $g2 ne MISSING_DATA  and  $g2 ne $g1 );
+      $n_equal_characters++;
    }
-   return $newick_str;
+   if ($L2 == $L1) {                    # moment of truth
+      if ($n_equal_characters == $L1) { # these are identical genotypes!!
+         print "genotypes with ids: $id2  and ", join(',', @{ $self->ids() }), " are identical.\n";
+      } else { # the genotype searched for is not present in the tree.
+         print "genotype with id: $id2 not present in tree.\n";
+      }
+   } elsif ($L2 > $L1) {        # Ok so far, but must look further ...
+      substr($gt2s, 0, $n_equal_characters, '');
+      my $g2head = substr($gt2s, 0, 1);
+      if ($g2head eq MISSING_DATA) { # must check all subtrees
+         while ( my ($gh, $child) = each %{ $self->children() }) {
+            $child->search_recursive($id2, $gt2s);
+         }
+      } else {
+         while ( my ($gh, $child) = each %{ $self->children() }) {
+            if ($gh eq $g2head  or  $gh eq MISSING_DATA) {
+               $child->search_recursive($id2, $gt2s);
+            }
+         }
+      }
+   }
 }
 
-sub as_string{
-   my $self = shift;
-   my $leaves_only = shift;
-   my $string = '';
-   my @child_gs = keys  %{$self->children()};
-   if ($leaves_only) {
+   sub newick_recursive{
+      my $self = shift;
+      my $newick_str = '';
+
+      if (keys %{ $self->children() } ) { # not a leaf node.
+         $newick_str .= '(';
+         for my $g (0,1,2,'-') {
+            $newick_str .= ( exists $self->children()->{$g} )? $self->children()->{$g}->newick_recursive() . ',' : '';
+         }
+         $newick_str =~ s/,$//;
+         $newick_str .= ')' . $self->genotype() . ':1';
+      } else {                  # leaf
+         my $gstring = $self->genotype();
+         substr($gstring, 4, -4, '...') if(length $gstring > 8);
+         $newick_str .= join('-', @{$self->ids()}) . '_' . $gstring . ':1';
+      }
+      return $newick_str;
+   }
+
+   sub as_string{
+      my $self = shift;
+      my $leaves_only = shift;
+      my $string = '';
+      my @child_gs = keys  %{$self->children()};
+      if ($leaves_only) {
+         if (scalar @child_gs == 0) {
+            $string .= 'd: ' . $self->depth() . '  ';
+            $string .= 'g: ' . $self->genotype() . '  ';
+            $string .=  $self->count() . ' ';
+            $string .=  join(',', @{$self->ids()}) . "\n";
+         }
+      } else {
+         $string .= 'depth: ' . $self->depth() . '  ';
+         $string .= 'count: ' . $self->count() . '  ';
+         $string .= 'ids: ' . join(',', @{$self->ids()}) . '  ';
+         $string .= 'genotype: ' . $self->genotype() . '  ';
+         $string .= 'children: ' . join(' ', @child_gs) . "\n";
+      }
+      return $string;
+   }
+
+   sub as_string_recursive{
+      my $self = shift;
+      my $leaves_only = shift;
+      my $string = $self->as_string($leaves_only);
+      my @gs = sort keys %{$self->children()};
+      #  print "child genotypes: ", join('  ', @gs), "\n"; 
+      for my $g (@gs) {
+         my $child_node = $self->children()->{$g};
+         #   print "g: $g ", $child_node->genotype(), "  depths: ", $self->depth(), "  ", $child_node->depth(), "\n";
+         $string .= $child_node->as_string_recursive($leaves_only);
+      }
+      return $string;
+   }
+
+   sub leaves_as_string{
+      my $self = shift;
+      my $string = '';
+      my @child_gs = keys  %{$self->children()};
       if (scalar @child_gs == 0) {
          $string .= 'd: ' . $self->depth() . '  ';
          $string .= 'g: ' . $self->genotype() . '  ';
          $string .=  $self->count() . ' ';
          $string .=  join(',', @{$self->ids()}) . "\n";
       }
-   } else {
-      $string .= 'depth: ' . $self->depth() . '  ';
-      $string .= 'count: ' . $self->count() . '  ';
-      $string .= 'ids: ' . join(',', @{$self->ids()}) . '  ';
-      $string .= 'genotype: ' . $self->genotype() . '  ';
-      $string .= 'children: ' . join(' ', @child_gs) . "\n";
+      return $string;
    }
-   return $string;
-}
 
-sub as_string_recursive{
-   my $self = shift;
-   my $leaves_only = shift;
-   my $string = $self->as_string($leaves_only);
-   my @gs = sort keys %{$self->children()};
-   #  print "child genotypes: ", join('  ', @gs), "\n"; 
-   for my $g (@gs) {
-      my $child_node = $self->children()->{$g};
-      #   print "g: $g ", $child_node->genotype(), "  depths: ", $self->depth(), "  ", $child_node->depth(), "\n";
-      $string .= $child_node->as_string_recursive($leaves_only);
+   sub leaves_as_string_recursive{
+      my $self = shift;
+      my $string = $self->leaves_as_string();
+      my @gs = sort keys %{$self->children()};
+      #  print "child genotypes: ", join('  ', @gs), "\n"; 
+      for my $g (@gs) {
+         my $child_node = $self->children()->{$g};
+         #   print "g: $g ", $child_node->genotype(), "  depths: ", $self->depth(), "  ", $child_node->depth(), "\n";
+         $string .= $child_node-> leaves_as_string_recursive();
+      }
+      return $string;
    }
-   return $string;
-}
 
-sub leaves_as_string{
-   my $self = shift;
-   my $string = '';
-   my @child_gs = keys  %{$self->children()};
-   if (scalar @child_gs == 0) {
-      $string .= 'd: ' . $self->depth() . '  ';
-      $string .= 'g: ' . $self->genotype() . '  ';
-      $string .=  $self->count() . ' ';
-      $string .=  join(',', @{$self->ids()}) . "\n";
-   }
-   return $string;
-}
+   ############################################
 
-sub leaves_as_string_recursive{
-   my $self = shift;
-   my $string = $self->leaves_as_string();
-   my @gs = sort keys %{$self->children()};
-   #  print "child genotypes: ", join('  ', @gs), "\n"; 
-   for my $g (@gs) {
-      my $child_node = $self->children()->{$g};
-      #   print "g: $g ", $child_node->genotype(), "  depths: ", $self->depth(), "  ", $child_node->depth(), "\n";
-      $string .= $child_node-> leaves_as_string_recursive();
-   }
-   return $string;
-}
+   __PACKAGE__->meta->make_immutable;
 
-############################################
-
-__PACKAGE__->meta->make_immutable;
-
-1;
+   1;

@@ -5,7 +5,6 @@ use Carp;
 use List::Util qw ( min max sum );
 
 use constant MISSING_DATA => '-';
-#Readonly my  $BIG_NUMBER => 1_000_000_000;
 
 # a class for genotypes
 # each has an identifier (integer),
