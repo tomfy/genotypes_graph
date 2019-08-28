@@ -3,7 +3,7 @@ use Moose;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
-use constant MISSING_DATA => '-';
+#use constant MISSING_DATA => '3';
 #use Readonly;
 
 use constant BIG_NUMBER => 1_000_000_000;
@@ -32,6 +32,7 @@ sub add_genotype{
    my $root = $self->root();
    $root->inc_counter();
    my @ids_array = push @{$root->ids()}, $id;
+print "$id  ", join(',', @ids_array), "\n";
    $root->ids( \@ids_array );
 
    my $current_node = $self->root();
@@ -49,8 +50,9 @@ sub add_genotype_compact{
    my $genotype_string = $gobj->sequence(); # entire (all snps) genotype as string.
    my $id = $gobj->id();
    my $root = $self->root();
-
+   $root->add_id($id);
    my $ghead = substr($genotype_string, 0, 1);
+print "Adding genotype to tree: $genotype_string \n";
    if (exists $root->children()->{$ghead}) {
       my $child = $root->children()->{$ghead};
          $child->add_genotype_compact($id, $genotype_string);
@@ -65,8 +67,11 @@ sub add_genotype_compact{
 sub search{
    my $self = shift;
    my $gobj = shift;
-my $root = $self->root();
-$root->search_recursive($gobj->id(), $gobj->sequence());
+   my $root = $self->root();
+   print "root id: ", join(',', @{$root->ids()}), "\n";
+   print "search id, genotype: ", $gobj->id(), "  ", $gobj->sequence(), "\n";
+   my $matching_ids = $root->search_recursive($gobj->id(), $gobj->sequence());
+   print "id: ", $gobj->id(), "  matches ids: $matching_ids \n";
 }
 
 

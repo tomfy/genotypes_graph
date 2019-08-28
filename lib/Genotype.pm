@@ -4,13 +4,13 @@ use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
 
-use constant MISSING_DATA => '-';
+use constant MISSING_DATA => '3';
 
 # a class for genotypes
 # each has an identifier (integer),
-# and a genotype represented as an array ref
-# containing numbers 0,1,2,3
-# 0 = AA, 1 = Aa, 2 = aa, 3 = missing.
+# and a genotype represented as a string
+# containing characters 0, 1, 2, MISSING_DATA
+# 0 = AA, 1 = Aa, 2 = aa.
 
 has id => (
            isa => 'Int',
