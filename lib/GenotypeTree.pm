@@ -3,11 +3,7 @@ use Moose;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
-#use constant MISSING_DATA => '3';
-#use Readonly;
-
-use constant BIG_NUMBER => 1_000_000_000;
-#use constant MULTIPLIER => 1000;
+use constant MISSING_DATA => 'X';
 
 has root => (
              isa => 'Object',   # should be a GenotypeTreeNode Object
@@ -32,13 +28,10 @@ sub add_genotype{
    my $root = $self->root();
    $root->inc_counter();
    my @ids_array = push @{$root->ids()}, $id;
-print "$id  ", join(',', @ids_array), "\n";
    $root->ids( \@ids_array );
-
    my $current_node = $self->root();
    for my $g (@$genotype) {
       my $next_node =  $current_node->add_child($id, $g);
-      #  print STDERR $current_node->as_string(), "   ", $next_node->as_string(), "\n";
       $current_node = $next_node;
    }
    return $current_node->depth() . " " . join(',', $current_node->ids());
@@ -52,7 +45,6 @@ sub add_genotype_compact{
    my $root = $self->root();
    $root->add_id($id);
    my $ghead = substr($genotype_string, 0, 1);
-print "Adding genotype to tree: $genotype_string \n";
    if (exists $root->children()->{$ghead}) {
       my $child = $root->children()->{$ghead};
          $child->add_genotype_compact($id, $genotype_string);
@@ -65,16 +57,28 @@ print "Adding genotype to tree: $genotype_string \n";
 }
 
 sub search{
-   my $self = shift;
-   my $gobj = shift;
-   my $root = $self->root();
-   print "root id: ", join(',', @{$root->ids()}), "\n";
-   print "search id, genotype: ", $gobj->id(), "  ", $gobj->sequence(), "\n";
-   my $matching_ids = $root->search_recursive($gobj->id(), $gobj->sequence());
-   print "id: ", $gobj->id(), "  matches ids: $matching_ids \n";
+  my $self = shift;
+  my $gobj = shift;
+  my $root = $self->root();
+  my $genotype_string = $gobj->sequence();
+  my $ghead = substr($genotype_string, 0, 1);
+  my $matching_ids = '';
+  if ($ghead eq MISSING_DATA) {
+    while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
+      $matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence());
+    }
+  } else {
+    while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
+      if ($gh eq $ghead  or  $gh eq MISSING_DATA) {
+	$matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence());
+      }
+    }
+  }
+  $matching_ids =~ s/,\s*$//;
+  my @sorted_ids = sort {$a <=> $b} split(',', $matching_ids);
+
+  return $gobj->id() . "  " . join(",", @sorted_ids) . "\n";
 }
-
-
 sub as_newick{
    my $self = shift;
    return $self->root()->newick_recursive();
