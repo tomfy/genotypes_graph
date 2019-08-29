@@ -4,7 +4,7 @@ use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
 
-use constant MISSING_DATA => '3';
+use constant MISSING_DATA => 'X';
 
 # a class for genotypes
 # each has an identifier (integer),
@@ -43,7 +43,6 @@ around BUILDARGS => sub {
    if (@_ == 1) {
       if (!ref $_[0]) { # argument should be string with >id generation pedigree \n sequence.
          my $arg = $_[0];
-         print "XXXXX: $arg \n";
          my ($idline, $sequence_string) = split(/\n/, $arg);
          my ($id, $generation, $pedigree) = (undef, undef, undef);
          if ($idline =~ /^>(\S+)\s+(\d+)\s+(\S+)\s*$/x) {
