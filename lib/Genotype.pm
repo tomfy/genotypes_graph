@@ -31,92 +31,92 @@ has pedigree => (
                 );
 
 has sequence => (
-                isa => 'Str',
-                is => 'ro',
-                required => 1,
+		 isa => 'Str',
+		 is => 'ro',
+		 required => 1,
                 );
 
 around BUILDARGS => sub {
-   my $orig = shift;
-   my $class = shift;
+  my $orig = shift;
+  my $class = shift;
 
-   if (@_ == 1) {
-      if (!ref $_[0]) { # argument should be string with >id generation pedigree \n sequence.
-         my $arg = $_[0];
-         my ($idline, $sequence_string) = split(/\n/, $arg);
-         my ($id, $generation, $pedigree) = (undef, undef, undef);
-         if ($idline =~ /^>(\S+)\s+(\d+)\s+(\S+)\s*$/x) {
-            ($id, $generation, $pedigree) = ($1, $2, $3);
-         } elsif ($idline =~ /^ > (\S+) /x) {
-            $id = $1;
-         } else {
-            die "in Genotype BUILDARGS argument $arg does not have expected >id format.\n";
-         }
-         $sequence_string =~ s/\s+//gx;
-      #   my @sequence_array = split(//, $sequence_string);
-         return {id => $id, sequence => $sequence_string, generation => $generation, pedigree => $pedigree};
+  if (@_ == 1) {
+    if (!ref $_[0]) { # argument should be string with >id generation pedigree \n sequence.
+      my $arg = $_[0];
+      my ($idline, $sequence_string) = split(/\n/, $arg);
+      my ($id, $generation, $pedigree) = (undef, undef, undef);
+      if ($idline =~ /^>(\S+)\s+(\d+)\s+(\S+)\s*$/x) {
+	($id, $generation, $pedigree) = ($1, $2, $3);
+      } elsif ($idline =~ /^ > (\S+) /x) {
+	$id = $1;
       } else {
-         return $_[0];          # should be hash ref of arguments
+	die "in Genotype BUILDARGS argument $arg does not have expected >id format.\n";
       }
-   }
-   # otherwise, don't modify arguments, should be array ref with id, sequence, and optionally generation and pedigree
+      $sequence_string =~ s/\s+//gx;
+      #   my @sequence_array = split(//, $sequence_string);
+      return {id => $id, sequence => $sequence_string, generation => $generation, pedigree => $pedigree};
+    } else {
+      return $_[0];		# should be hash ref of arguments
+    }
+  }
+  # otherwise, don't modify arguments, should be array ref with id, sequence, and optionally generation and pedigree
 };
 
 
 sub distance{ # calculate distance between this genotype obj. and another
-   my $self = shift;
-   my $other_genotype = shift;
-   my $this_gt = $self->sequence();            # string
-   my $other_gt = $other_genotype->sequence(); # string
+  my $self = shift;
+  my $other_genotype = shift;
+  my $this_gt = $self->sequence();	      # string
+  my $other_gt = $other_genotype->sequence(); # string
 
-   my $distance = 0;
-   my $count_both = 0; # count of snps with data present in both sequences
-   my $count_missing = 0; # count of snps with data absent in one or both sequences
-   if (length $this_gt == length $other_gt) {
-       for my $i (0 .. (length $this_gt) - 1){
-	 my $c1 = substr($this_gt, $i, 1);
-         my $c2 = substr($other_gt, $i, 1); # $other_gt->[$i];
-         if ( ($c1 eq MISSING_DATA)  or ($c2 eq MISSING_DATA) ) {
-            $count_missing++;
-         } else {
-            $count_both++;
-            if ($c2 != $c1) {
-               if ($c1 == 0) {
-                  $distance += $c2 - $c1;
-               } elsif ($c1 == 1) {
-                  $distance += 1;
-               } elsif ($c1 == 2) {
-                  $distance += $c1 - $c2;
-               } else {
-                  die "c1 has unhandled value: $c1 \n";
-               }
-            }
-         }
+  my $distance = 0;
+  my $count_both = 0; # count of snps with data present in both sequences
+  my $count_missing = 0; # count of snps with data absent in one or both sequences
+  if (length $this_gt == length $other_gt) {
+    for my $i (0 .. (length $this_gt) - 1) {
+      my $c1 = substr($this_gt, $i, 1);
+      my $c2 = substr($other_gt, $i, 1); # $other_gt->[$i];
+      if ( ($c1 eq MISSING_DATA)  or ($c2 eq MISSING_DATA) ) {
+	$count_missing++;
+      } else {
+	$count_both++;
+	if ($c2 != $c1) {
+	  if ($c1 == 0) {
+	    $distance += $c2 - $c1;
+	  } elsif ($c1 == 1) {
+	    $distance += 1;
+	  } elsif ($c1 == 2) {
+	    $distance += $c1 - $c2;
+	  } else {
+	    die "c1 has unhandled value: $c1 \n";
+	  }
+	}
       }
-   }
-   return ($distance, $count_both, $count_missing);
+    }
+  }
+  return ($distance, $count_both, $count_missing);
 }
 
 sub mean{
-   my $self = shift;
-   my $other_genotype = shift;
-   my $this_gt = $self->sequence();            # array ref of 0,1,2,3
-   my $other_gt = $other_genotype->sequence(); # array ref of 0,1,2,3
-   my @mean_gt = ();
-   if ( length $this_gt == length $other_gt) { # check that lengths are equal
-       for my $i (0 .. (length $this_gt) - 1){
-	 my $c1 = substr($this_gt, $i, 1);
-         my $c2 = substr($other_gt, $i, 1);
-         if ($c1 eq MISSING_DATA) {
-            push @mean_gt, $c2;
-         } elsif ($c2 eq MISSING_DATA) {
-            push @mean_gt, $c1;
-         } else {
-            push @mean_gt, 0.5*($c1 + $c2);
-         }
+  my $self = shift;
+  my $other_genotype = shift;
+  my $this_gt = $self->sequence();	      # array ref of 0,1,2,3
+  my $other_gt = $other_genotype->sequence(); # array ref of 0,1,2,3
+  my @mean_gt = ();
+  if ( length $this_gt == length $other_gt) { # check that lengths are equal
+    for my $i (0 .. (length $this_gt) - 1) {
+      my $c1 = substr($this_gt, $i, 1);
+      my $c2 = substr($other_gt, $i, 1);
+      if ($c1 eq MISSING_DATA) {
+	push @mean_gt, $c2;
+      } elsif ($c2 eq MISSING_DATA) {
+	push @mean_gt, $c1;
+      } else {
+	push @mean_gt, 0.5*($c1 + $c2);
       }
-   }
-   return \@mean_gt;
+    }
+  }
+  return \@mean_gt;
 }
 
 ############################################
