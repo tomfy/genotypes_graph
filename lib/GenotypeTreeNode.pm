@@ -1,13 +1,13 @@
 package GenotypeTreeNode;
 use Moose;
 use namespace::autoclean;
-use Carp::Assert;
+#use Carp::Assert;
 use List::Util qw ( min max sum );
-use constant MISSING_DATA => '3';
+use constant MISSING_DATA => 'X';
 
 no warnings 'recursion';
 
-use constant DEBUG => 1;
+#use constant DEBUG => 0;
 
 
 # a class for nodes of a tree.
@@ -16,6 +16,7 @@ has ids => (
             is => 'rw',
             default => sub { [] },
            );
+
 
 has count => (
               traits => ['Counter'],
@@ -27,7 +28,7 @@ has count => (
                          },
              );
 
-has depth => (               # 0 for root, 1 for root's children, etc.
+has depth => ( # 0 for root, counts not number of nodes below root, but number of snps, so all leaves have depth == lenght of genotype sequences.
               isa => 'Int',
               is => 'ro',
               required => 1,
@@ -81,13 +82,12 @@ sub add_genotype_compact{
       last if(substr($gt1s, $i, 1) ne substr($gt2s, $i, 1));
       $n_equal_characters++;
    }
-   assert ($n_equal_characters > 0) if DEBUG;
+#   assert ($n_equal_characters > 0) if DEBUG;
 
-   my $g_common;
-   if ($n_equal_characters < length $gt1s) { # @gt1 and beginning of @gt2 are not the same.
-      $g_common = substr($gt1s, 0, $n_equal_characters, '');
-      my $g2_common = substr( $gt2s, 0, $n_equal_characters, ''); # 
-      assert ($g2_common eq $g_common) if DEBUG;
+   if ($n_equal_characters < length $gt1s) { # $gt1s and beginning of $gt2s are not the same.
+      my $g_common = substr($gt1s, 0, $n_equal_characters, '');
+      my $g2_common = substr( $gt2s, 0, $n_equal_characters, ''); 
+#     assert ($g2_common eq $g_common) if DEBUG;
       my @new_child1_ids = @{ $self->ids() };
       my $new_child1 = GenotypeTreeNode->new( { parent => $self, 
                                                 depth => $d+$n_equal_characters, 
@@ -101,16 +101,16 @@ sub add_genotype_compact{
       $self->genotype($g_common);
       push @{$self->ids()}, $id2;
       $self->children( { substr($gt1s, 0, 1) => $new_child1, substr($gt2s, 0, 1) => $new_child2 } );
-   } else {              # @gt1 and beginning of @gt2 are the same, so
+   } else {              # $gt1s and beginning of $gt2 are the same, so
       substr($gt2s, 0, $n_equal_characters, '');
-      if ((length $gt2s) > 0) { # theres a bit of @gt2 
+      if ((length $gt2s) > 0) { # theres a bit of $gt2s left 
          my $gt2head = substr($gt2s, 0, 1);
          if (exists $self->children()->{$gt2head}) {
             $self->children()->{$gt2head}->add_genotype_compact($id2, $gt2s);
          } else {
             my $new_child = 
               GenotypeTreeNode->new( { parent => $self, depth => $d+$n_equal_characters, 
-                                       genotype => $gt2s, 
+                                       genotype => $gt2s,
                                        ids => [$id2] } );
             $self->children()->{$gt2head} = $new_child;
          }
@@ -126,13 +126,9 @@ sub search_recursive{
    my $gt2s = shift;            # searching for this one.
    my $gt1s = $self->genotype();
    my ($L1, $L2) = (length $gt1s, length $gt2s);
-   if (1 or $L2 < $L1) {
-      print "id12, L12:  [", join(',', @{$self->ids()}), "]  [$id2]   L1, L2: $L1  $L2 \n";
-      print "gt12: $gt1s  $gt2s \n";
-   }
+
    my $id1s = join(",", @{$self->ids()});
-   print "ids 1, 2:  $id1s  $id2   $L1  $L2 \n";
-   assert ($L2 >= $L1) if DEBUG;
+#   assert ($L2 >= $L1) if DEBUG;
    my $matching_id_string = '';
    my $n_equal_characters = 0;
    for my $i (0 .. $L1 - 1) {
@@ -141,12 +137,9 @@ sub search_recursive{
       $n_equal_characters++;
    }
    if ($L2 == $L1) {     # moment of truth - this must be a leaf node.
-      #  print "AA: ", join('-', @{$self->ids()}), "  $id2  $gt1s  $gt2s   $n_equal_characters \n";
       if ($n_equal_characters == $L1) { # these are identical genotypes!!
-         print "  genotypes with ids: $id2  and ", join(',', @{ $self->ids() }), " are identical.\n";
-         $matching_id_string .= join('-', @{$self->ids()}) . '-';
+         $matching_id_string .= join(',', @{$self->ids()}) . ',';
       } else { # the genotype searched for is not present in this branch.
-         print "genotype  $gt2s  with id: $id2 not consistent with this branch (id: $id1s ",  "  genotype $gt1s).\n";
       }
    } elsif ($L2 > $L1) {        # Ok so far, but must look further ...
       substr($gt2s, 0, $n_equal_characters, '');
@@ -156,7 +149,6 @@ sub search_recursive{
             $matching_id_string .= $child->search_recursive($id2, $gt2s);
          }
       } else {
-         #  while ( my ($gh, $child) = each %{ $self->children() }) {
          for my $gh ($g2head,MISSING_DATA) {
             my $child = $self->children()->{$gh} // undef;
             if (defined $child) {
@@ -167,7 +159,6 @@ sub search_recursive{
          }
       }
    }
-   print "bottom of search_recursive. matching id string: $matching_id_string \n";
    return $matching_id_string;
 }
 
