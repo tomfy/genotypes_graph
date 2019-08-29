@@ -66,15 +66,16 @@ around BUILDARGS => sub {
 sub distance{ # calculate distance between this genotype obj. and another
    my $self = shift;
    my $other_genotype = shift;
-   my $this_gt = $self->sequence();            # array ref of 0,1,2,3
-   my $other_gt = $other_genotype->sequence(); # array ref of 0,1,2,3
+   my $this_gt = $self->sequence();            # string
+   my $other_gt = $other_genotype->sequence(); # string
 
    my $distance = 0;
    my $count_both = 0; # count of snps with data present in both sequences
    my $count_missing = 0; # count of snps with data absent in one or both sequences
-   if (scalar @$this_gt == scalar @$other_gt) {
-      while (my($i, $c1) = each @{$this_gt}) {
-         my $c2 = $other_gt->[$i];
+   if (length $this_gt == length $other_gt) {
+       for my $i (0 .. (length $this_gt) - 1){
+	 my $c1 = substr($this_gt, $i, 1);
+         my $c2 = substr($other_gt, $i, 1); # $other_gt->[$i];
          if ( ($c1 eq MISSING_DATA)  or ($c2 eq MISSING_DATA) ) {
             $count_missing++;
          } else {
@@ -102,9 +103,10 @@ sub mean{
    my $this_gt = $self->sequence();            # array ref of 0,1,2,3
    my $other_gt = $other_genotype->sequence(); # array ref of 0,1,2,3
    my @mean_gt = ();
-   if (scalar @$this_gt == scalar @$other_gt) { # check that lengths are equal
-      while (my($i, $c1) = each @{$this_gt}) {
-         my $c2 = $other_gt->[$i];
+   if ( length $this_gt == length $other_gt) { # check that lengths are equal
+       for my $i (0 .. (length $this_gt) - 1){
+	 my $c1 = substr($this_gt, $i, 1);
+         my $c2 = substr($other_gt, $i, 1);
          if ($c1 eq MISSING_DATA) {
             push @mean_gt, $c2;
          } elsif ($c2 eq MISSING_DATA) {
