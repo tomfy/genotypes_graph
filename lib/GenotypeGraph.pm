@@ -178,7 +178,7 @@ sub distance_matrix_as_string{
    my $d_matrix_string = '# ' . $multiplier ."\n";
    while ( my ($i, $id1) = each @ids) {
       my $id2_dist = $idA__idB_distance->{$id1};
-      my @id2s = sort { $a <=> $b } keys $id2_dist;
+      my @id2s = sort { $a <=> $b } keys %$id2_dist;
       $d_matrix_string .= sprintf("%2d  %s\n", $id1, join(" ", map (int($multiplier*$id2_dist->{$_} + 0.5), @id2s[$i..$n_nodes-2]) ) );
    }
    return $d_matrix_string;
