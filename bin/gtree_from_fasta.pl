@@ -60,7 +60,7 @@ use Genotype;
   print STDERR "RNG type: $rng_type \n";
   my $the_rng = (defined $rng_seed)? Math::GSL::RNG->new($rng_type, $rng_seed) : Math::GSL::RNG->new($rng_type) ; # RNG
   # ############################################################################################
-my ($t0, $t1, $t2, $t3, $t4);
+  my ($t0, $t1, $t2, $t3, $t4);
   $t0 = gettimeofday();
 
   my $input_filename_stem = $input_filename;
@@ -116,7 +116,7 @@ my ($t0, $t1, $t2, $t3, $t4);
   if ($algorithm ne 'quick') {
     my $N = scalar @genotype_objects;
     while (my($i, $g1) = each @genotype_objects) {
-      for my $j ($i .. $N-1) {
+      for my $j ($i+1 .. $N-1) {
 	my $g2 = $genotype_objects[$j];
 	if (compare_two_genotype_objects($g1, $g2) eq 'equal') {
 	  $exhaustive_eqpairs{$g1->id()} .= $g2->id() . ',';
@@ -134,7 +134,7 @@ my ($t0, $t1, $t2, $t3, $t4);
       $s =~ s/,\s*$//;
       my @eeks = split(',', $s);
       @eeks = sort { $a <=> $b } @eeks;
-      $ex_str .=  "$anid  " . join(",", @eeks) . "\n";
+      $ex_str .=  "$anid  " . join(",", @eeks) . "\n" if(scalar @eeks > 0);
     }
     print "[$ex_str]\n";
   }
@@ -149,42 +149,62 @@ my ($t0, $t1, $t2, $t3, $t4);
       if (!$compact) {
 	$gtree->add_genotype($gobj);
       } else {
+	$quick_str .= $gtree->search($gobj);
 	$gtree->add_genotype_compact($gobj);
+	#	print $gtree->as_newick(), "\n\n" if($newick_out);
       }
     }
     $t3 = gettimeofday();
-    print STDERR "time to do construct genotype tree: ", $t3-$t2, " sec.\n";
+    print STDERR "time to construct and search genotype tree: ", $t3-$t2, " sec.\n";
   
     print "root ids:  ", $gtree->root()->id_as_string(), "\n";
     print $gtree->as_newick(), "\n\n" if($newick_out);
     $t3 = gettimeofday();
- 
-    print "Now search for genotypes in tree: \n";
- 
-    for my $gobj (@genotype_objects) {
-      $quick_str .= $gtree->search($gobj);
-    }
-    $t4 = gettimeofday();
-    print STDERR "time to do search tree for N genotypes: ", $t4-$t3, " sec.\n";
+
+    #   print STDERR "time to do search tree for N genotypes: ", $t4-$t3, " sec.\n";
     print "[$quick_str]\n";
   }
-  print STDERR "algorithm: [$algorithm] \n";
-  if ($algorithm eq 'both') {
-    if ($quick_str eq $ex_str) {
-      print STDERR "Strings are equal.\n";
-    } else {
-      print STDERR "Strings are not equal.\n";
 
-      my @exs = split("\n", $ex_str);
-      my @qs = split("\n", $quick_str);
-      while(my($i, $q) = each @qs){
-	my $x = $exs[$i];
-	print STDERR "$q  $x \n";
-	exit if($q ne $x);
-      }
+  # check quick gives same edge set as exhaustive
+  my %exedges = ();
+  my %qedges = ();
+  my @exs = split("\n", $ex_str);
+  my @qs = split("\n", $quick_str);
+  
+  for my $line (@exs) {
+    my ($id1, $id2str) = split(' ', $line);
+    my @id2s = split(',', $id2str);
+    for my $id2 (@id2s) {
+      my $edge_id = ($id1 < $id2)? $id1 . " " . $id2 : $id2 . " " . $id1;
+      $exedges{$edge_id} = 1;
     }
   }
-  print STDERR "    input/gobjs   Nchoose2   treeconstruct  treesearch      total \n";
+  for my $line (@qs) {
+    my ($id1, $id2str) = split(' ', $line);
+    my @id2s = split(',', $id2str);
+    for my $id2 (@id2s) {
+      my $edge_id = ($id1 < $id2)? $id1 . " " . $id2 : $id2 . " " . $id1;
+      $qedges{$edge_id} = 1;
+    }
+  }
+  if($algorithm eq 'both'){
+  my $ok = 1;
+  my $bad_edge = 'undef';
+  for (keys %exedges) {
+    if (!exists $qedges{$_}) {
+      $ok = 0;
+      $bad_edge = $_;
+      last;
+    }
+  }
+  if (!$ok) {
+    print "edge sets not equal. bad edge: $bad_edge \n";
+  } else {
+  print "edge sets are equal \n";
+}
+}
+  $t4 = gettimeofday();
+  print STDERR "    input/gobjs   Nchoose2  treeconstrsearch  check       total \n";
   printf(STDERR "%12.3f %12.3f %12.3f %12.3f %12.3f \n",$t1-$t0, $t2-$t1, $t3-$t2, $t4-$t3, $t4-$t0);
 }                               # end main
 
@@ -220,3 +240,4 @@ sub compare_two_genotype_objects{
   }
   return ($n_equal_characters == $L1)? 'equal' : 'unequal';
 }
+
