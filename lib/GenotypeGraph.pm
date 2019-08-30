@@ -176,6 +176,7 @@ sub distance_matrix_as_string{
    my @ids = sort {$a <=> $b} keys %$idA__idB_distance;
    my $n_nodes = scalar @ids;
    my $d_matrix_string = '# ' . $multiplier ."\n";
+   $d_matrix_string .= join(" ", @ids) . "\n";
    while ( my ($i, $id1) = each @ids) {
       my $id2_dist = $idA__idB_distance->{$id1};
       my @id2s = sort { $a <=> $b } keys %$id2_dist;
