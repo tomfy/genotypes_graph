@@ -17,8 +17,18 @@ has depth => (                  # equal to length of sequences
               required => 1,
              );
 
+has size => ( # number of genotypes which have been added.
+	     isa => 'Int',
+	     is => 'rw',
+	     default => 0,
+	     );
 
 # class to represent a tree of genotypes
+
+sub BUILD{
+  my $self = shift;
+  $self->root()->tree($self);
+}
 
 sub add_genotype{
    my $self = shift;
@@ -38,22 +48,26 @@ sub add_genotype{
 }
 
 sub add_genotype_compact{
-   my $self = shift;
-   my $gobj = shift;
-   my $genotype_string = $gobj->sequence(); # entire (all snps) genotype as string.
-   my $id = $gobj->id();
-   my $root = $self->root();
-   $root->add_id($id);
-   my $ghead = substr($genotype_string, 0, 1);
-   if (exists $root->children()->{$ghead}) {
-      my $child = $root->children()->{$ghead};
-         $child->add_genotype_compact($id, $genotype_string);
-   } else {
-      my $new_node = GenotypeTreeNode->new( {parent => $root, depth => 1, 
-                                             genotype => $genotype_string, 
-                                             ids => [$id] } );
-      $root->children()->{$ghead} = $new_node;
-   }
+  my $self = shift;
+  my $gobj = shift;
+  my $genotype_string = $gobj->sequence(); # entire (all snps) genotype as string.
+  my $id = $gobj->id();
+  my $root = $self->root();
+  $root->add_id($id);
+  my $ghead = substr($genotype_string, 0, 1);
+  if (exists $root->children()->{$ghead}) {
+    $root->children()->{$ghead}->add_genotype_compact($id, $genotype_string);
+  } else {
+    my $new_node = GenotypeTreeNode->new( {tree => $self,
+					   parent => $root,
+					   depth => length $genotype_string,
+					   genotype => $genotype_string, 
+					   ids => [$id] } );
+    $root->children()->{$ghead} = $new_node;
+  }
+  $self->size($self->size()+1);
+#  print "done adding genotype.\n\n";
+ # exit if($self->size() > 20);
 }
 
 sub search{
@@ -77,8 +91,9 @@ sub search{
   $matching_ids =~ s/,\s*$//;
   my @sorted_ids = sort {$a <=> $b} split(',', $matching_ids);
 
-  return $gobj->id() . "  " . join(",", @sorted_ids) . "\n";
+  return( scalar @sorted_ids > 0)? $gobj->id() . "  " . join(",", @sorted_ids) . "\n" : '';
 }
+
 sub as_newick{
    my $self = shift;
    return $self->root()->newick_recursive();

@@ -1,13 +1,13 @@
 package GenotypeTreeNode;
 use Moose;
 use namespace::autoclean;
-#use Carp::Assert;
+use Carp::Assert;
 use List::Util qw ( min max sum );
 use constant MISSING_DATA => 'X';
 
 no warnings 'recursion';
 
-#use constant DEBUG => 0;
+use constant DEBUG => 0;
 
 
 # a class for nodes of a tree.
@@ -28,9 +28,9 @@ has count => (
                          },
              );
 
-has depth => ( # 0 for root, counts not number of nodes below root, but number of snps, so all leaves have depth == lenght of genotype sequences.
+has depth => ( # 0 for root, counts not number of nodes below root, but number of snps, so all leaves have depth == length of genotype sequences.
               isa => 'Int',
-              is => 'ro',
+              is => 'rw',
               required => 1,
              );
 
@@ -42,7 +42,7 @@ has genotype => ( # the one or more snp genotype associated with this node. Char
 
 has parent => (
                isa => 'Maybe[Object]',
-               is => 'ro',
+               is => 'rw',
                default => undef,
               );
 
@@ -52,6 +52,13 @@ has children => (
                  default => sub { {} },
                 );
 
+has tree => (
+	     isa => 'Object',
+	     is => 'rw',
+	     required => 0,
+	     );
+
+
 sub add_child{                  # 
    my $self = shift;
    my $id = shift;
@@ -60,7 +67,8 @@ sub add_child{                  #
    my $child_node;
 
    if (!defined $self->children()->{$g}) {
-      $child_node = GenotypeTreeNode->new( {parent => $self, depth => $d+1, genotype => $g, ids => [$id] } );
+     $child_node = GenotypeTreeNode->new( {tree => $self->tree(),
+					   parent => $self, depth => $d+1, genotype => $g, ids => [$id] } );
       $self->children()->{$g} = $child_node;
    } else {
       $child_node = $self->children()->{$g};
@@ -68,6 +76,14 @@ sub add_child{                  #
    }
    $child_node->inc_counter();
    return $child_node;
+ }
+
+sub _add_id{
+  my $self = shift;
+  my $id_to_add = shift;
+  my @ids = @{$self->ids()};
+  push @ids, $id_to_add;
+  $self->ids(\@ids);
 }
 
 sub add_genotype_compact{
@@ -76,40 +92,55 @@ sub add_genotype_compact{
    my $gt2s = shift;
    my $gt1s = $self->genotype();
    my $d = $self->depth();
-
+   my $parent_depth = $self->parent()->depth();
    my $n_equal_characters = 0;
+
    for my $i (0 .. (length $gt1s) - 1) {
       last if(substr($gt1s, $i, 1) ne substr($gt2s, $i, 1));
       $n_equal_characters++;
-   }
-#   assert ($n_equal_characters > 0) if DEBUG;
+    }
+   
+   my ($l1, $l2) = (length $gt1s, length $gt2s);
 
-   if ($n_equal_characters < length $gt1s) { # $gt1s and beginning of $gt2s are not the same.
+   if ($n_equal_characters < length $gt1s) { # $gt1s and beginning of $gt2s are not the same. Make new node between self and parent.
+     # $self gets two new children, child1 gets $self's children, and child2 is a leaf (no children)
       my $g_common = substr($gt1s, 0, $n_equal_characters, '');
-      my $g2_common = substr( $gt2s, 0, $n_equal_characters, ''); 
-#     assert ($g2_common eq $g_common) if DEBUG;
+      my $g2_common = substr( $gt2s, 0, $n_equal_characters, '');
+      #     assert ($g2_common eq $g_common) if DEBUG;
+
       my @new_child1_ids = @{ $self->ids() };
-      my $new_child1 = GenotypeTreeNode->new( { parent => $self, 
-                                                depth => $d+$n_equal_characters, 
-                                                genotype => $gt1s, 
+     my $new_child1 = GenotypeTreeNode->new( {tree => $self->tree(),
+					      parent => $self,
+                                                depth => $d,
+                                                genotype => $gt1s,
                                                 ids => \@new_child1_ids,
-                                                children => $self->children() } );
-      my $new_child2 = GenotypeTreeNode->new( { parent => $self, 
-                                                depth => $d+$n_equal_characters, 
-                                                genotype => $gt2s, 
-                                                ids => [$id2] } );
+					      children => $self->children() } );
+
+     my $new_child2 = GenotypeTreeNode->new( {tree => $self->tree(),
+					      parent => $self,
+                                                depth => $parent_depth + $n_equal_characters + length $gt2s,
+                                                genotype => $gt2s,
+					      ids => [$id2] } );
+     while(my($g, $ch) = each %{$self->children()}){  # these need to make $new_child1 their parent!
+       $ch->parent($new_child1);
+     }
       $self->genotype($g_common);
-      push @{$self->ids()}, $id2;
-      $self->children( { substr($gt1s, 0, 1) => $new_child1, substr($gt2s, 0, 1) => $new_child2 } );
+     $self->depth($parent_depth + $n_equal_characters);
+     $self->children( { substr($gt1s, 0, 1) => $new_child1, substr($gt2s, 0, 1) => $new_child2 } );
+   $self->add_id($id2);
+
    } else {              # $gt1s and beginning of $gt2 are the same, so
       substr($gt2s, 0, $n_equal_characters, '');
-      if ((length $gt2s) > 0) { # theres a bit of $gt2s left 
-         my $gt2head = substr($gt2s, 0, 1);
+      if ((length $gt2s) > 0) { # theres a bit of $gt2s left
+	my $gt2head = substr($gt2s, 0, 1);
+	$self->add_id($id2);
          if (exists $self->children()->{$gt2head}) {
             $self->children()->{$gt2head}->add_genotype_compact($id2, $gt2s);
-         } else {
+	  } else {
             my $new_child = 
-              GenotypeTreeNode->new( { parent => $self, depth => $d+$n_equal_characters, 
+              GenotypeTreeNode->new( {tree => $self->tree(),
+				      parent => $self,
+				       depth => $d + length $gt2s, 
                                        genotype => $gt2s,
                                        ids => [$id2] } );
             $self->children()->{$gt2head} = $new_child;
@@ -162,23 +193,49 @@ sub search_recursive{
    return $matching_id_string;
 }
 
-sub newick_recursive{
-   my $self = shift;
-   my $newick_str = '';
+sub check_node{
+  my $self = shift;
+  my $error = 0;
+  my @check_ids = ();
+  if(scalar %{$self->children()} > 0){
+  while (my($g, $chobj) = each %{$self->children()}) {
+    $error += 1 if($chobj->parent() ne $self);
+    $error += 10 if($self->depth() + length $chobj->genotype() != $chobj->depth());
+    push @check_ids,  @{$chobj->ids()};
+  }
+    my $ids_str = join(',', sort {$a <=> $b} @{$self->ids()});
+  my $check_ids_str = join(',', sort {$a <=> $b} @check_ids);
+  print "[$ids_str]  [$check_ids_str] \n";
+  $error += 100 if ($check_ids_str ne $ids_str);
+}
+  return $error;
+}
 
-   if (keys %{ $self->children() } ) { # not a leaf node.
-      $newick_str .= '(';
-      for my $g (0,1,2,MISSING_DATA) {
-         $newick_str .= ( exists $self->children()->{$g} )? $self->children()->{$g}->newick_recursive() . ',' : '';
-      }
-      $newick_str =~ s/,$//;
-      $newick_str .= ')' . $self->genotype() . ':1';
-   } else {                     # leaf
-      my $gstring = $self->genotype();
-      substr($gstring, 4, -4, '...') if(length $gstring > 8);
-      $newick_str .= join('-', @{$self->ids()}) . '_' . $gstring . ':1';
-   }
-   return $newick_str;
+sub newick_recursive{
+  my $self = shift;
+  my $newick_str = '';
+
+    assert($self->check_node() == 0) if DEBUG;
+
+  if (keys %{ $self->children() } ) { # not a leaf node.
+    $newick_str .= '(';
+    for my $g (0,1,2,MISSING_DATA) {
+      $newick_str .= ( exists $self->children()->{$g} )? $self->children()->{$g}->newick_recursive() . ',' : '';
+    }
+    $newick_str =~ s/,$//;
+    $newick_str .=
+      #')' . $self->genotype() . ':1';
+      ')' .
+      #	  join('-', @{$self->ids()}) . '_' .
+      $self->depth() . '_' . $self->genotype() . ':1';
+  } else {			# leaf
+    my $gstring = $self->genotype();
+    substr($gstring, 4, -4, '...') if(length $gstring > 8); # if long, only show beginning and end
+    my $depth = $self->depth();
+    #	print "XXX ", join('-', @{$self->ids()}), "  $depth\n"; # if($depth != 200);
+    $newick_str .= join('-', @{$self->ids()}) . '_' . $self->depth() . '_' . $gstring . ':1';
+  }
+  return $newick_str;
 }
 
 sub as_string{
@@ -198,7 +255,7 @@ sub as_string{
       $string .= 'count: ' . $self->count() . '  ';
       $string .= 'ids: ' . join(',', @{$self->ids()}) . '  ';
       $string .= 'genotype: ' . $self->genotype() . '  ';
-      $string .= 'children: ' . join(' ', @child_gs) . "\n";
+      $string .= 'children: ' . join(',', @child_gs) . "\n";
    }
    return $string;
 }
