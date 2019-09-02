@@ -48,7 +48,7 @@ use Genotype;
 	    );
 
   my %exhaustive_eqpairs = ();	# 
-
+  my $ok = '---';
   # ############## set up the random number generator ##########################################
   if ($rng_type eq 'sys') {
     $rng_type = $gsl_rng_default;
@@ -188,23 +188,25 @@ use Genotype;
     }
   }
   if($algorithm eq 'both'){
-  my $ok = 1;
+  $ok = 'equal';
   my $bad_edge = 'undef';
   for (keys %exedges) {
     if (!exists $qedges{$_}) {
-      $ok = 0;
+      $ok = 'not equal';
       $bad_edge = $_;
       last;
     }
   }
-  if (!$ok) {
+  #print "ok: $ok \n";
+  if ($ok eq 'not equal') {
     print "edge sets not equal. bad edge: $bad_edge \n";
+  } elsif ($ok eq 'equal') {
+    print "edge sets are equal \n";
   } else {
-  print "edge sets are equal \n";
-}
+  }
 }
   $t4 = gettimeofday();
-  print STDERR "    input/gobjs   Nchoose2  treeconstrsearch  check       total \n";
+  print STDERR "    input/gobjs   Nchoose2  treeconstrsearch  check       total    $ok \n";
   printf(STDERR "%12.3f %12.3f %12.3f %12.3f %12.3f \n",$t1-$t0, $t2-$t1, $t3-$t2, $t4-$t3, $t4-$t0);
 }                               # end main
 
