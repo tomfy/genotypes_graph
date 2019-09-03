@@ -8,6 +8,7 @@ use warnings;
 sub new {
   my $classname = shift;
   print $classname, "\n";
+  my $size_limit = shift;
   return bless {
 		queue => [],
 		prios => {},	# by payload
@@ -49,10 +50,61 @@ sub get_size {
   return scalar @{$self->{queue}};
 }
 
-sub insert_size_limited{
+sub size_limited_array_insert{
+  my $self = shift;
+  my $id_dist = shift; # hash ref of id:distance pairs.
+  my $k = shift;
+  my $id_list = shift;
+
+  #  print "list: ", join(' ', @$list), "  k: $k \n";
+  my $pivot_id = int rand @$id_list - 1; #int (0.5* (rand @{ $list } + rand @{$list})) - 1;
+  my $pivot = $id_dist->{$pivot_id};
+
+  my @lefts = (); my @rights = (); my @equals = ();
+  if (1) {
+    @lefts  = grep { $id_dist->{$_} < $pivot } @$id_list;
+    @rights = grep { $id_dist->{$_} > $pivot } @$id_list;
+    # my @equals = grep { $_ == $pivot } @$list;
+    # my @equals = ();
+    if (@lefts + @rights + 1 == scalar @$list) {
+      push @equals, $pivot;
+    } else {
+      @equals = grep { $_ == $pivot } @$list;
+    }
+  } else {
+ 
+    for (@$id_list) {
+      if (id_dist->{$_} < $pivot) {
+	push @lefts, $_;
+      } elsif ($_ > $pivot) {
+	push @rights, $_;
+      } else {
+	push @equals, $_;
+      }
+    }
+  }
+  if ($k < @lefts) {  # kth will be in @lefts, but lefts has too many.
+    return qselect_x(\@lefts, $k);
+  } elsif ($k > @lefts + @equals) { # kth will be in @rights
+    return ((@lefts, @equals), qselect_x(\@rights, $k - @lefts - @equals));
+  } elsif ($k == @lefts) {	# done 
+    return @lefts;
+  } elsif ($k <= @lefts + @equals) { # just @lefts plus 1 or more from @equals
+    push @lefts, @equals[0..$k-@lefts-1];
+    return @lefts;
+  } else {
+    die "???\n";
+  }
+}
+
+
+}
+
+sub size_limited_insert{
   my ($self, $payload, $priority) = @_;
   my $worst_priority = $self->{prios}->{$self->{queue}->[-1]};
-  assert ($self->size() <= $self->{size_limit});
+  #  assert ($self->size() <= $self->{size_limit});
+  if(defined $self->{size_limit}){
   my $at_limit = scalar @{$self->{queue}} == $self->{size_limit};
   if ($priority < $worst_priority) {
     $self->insert($payload, $priority);
@@ -60,6 +112,9 @@ sub insert_size_limited{
   } elsif (!$at_limit) {
     $self->insert($payload, $priority);
   }
+}else{ # insert without regard to size of queue
+  $self->insert($payload, $priority);
+}
 }
 sub unchecked_insert {
   my ($self, $payload, $priority, $lower, $upper) = @_;

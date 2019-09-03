@@ -3,7 +3,7 @@ use Moose;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
-#use Readonly;
+use Graph;
 
 use constant BIG_NUMBER => 1_000_000_000;
 #use constant MULTIPLIER => 1000;
@@ -30,6 +30,12 @@ has distances => (
                   default => sub { {} },
                  );
 
+has Graph_object => (
+		     isa => 'Object',
+		     is => 'rw',
+		     default => sub { Graph->new() },
+		     );
+
 around BUILDARGS => sub {
    my $orig = shift;
    my $class = shift;
@@ -46,7 +52,7 @@ around BUILDARGS => sub {
          $id_gobj{$gobj->id()} = $gobj;
       }
 
-      # calculate and store distances
+      # calculate and store distances (N choose 2 of them)
       my %idA__idB_distance = (); # hash of hash refs
       my @ids = sort { $a <=> $b } keys %id_gobj;
       my $n_nodes = scalar @ids;
@@ -80,8 +86,21 @@ around BUILDARGS => sub {
       my $id_node = {};
       my $n_edges = $args->{n_edges} // BIG_NUMBER;
       $n_edges = min($n_edges, $n_nodes-1);
+
       while ( my ($i, $id1) = each @ids) {
-         my $id2_dist = $idA__idB_distance{$id1};
+	my $id2_dist = $idA__idB_distance{$id1};
+	my $count = 0;
+	if(1){
+	   my $pq = List::PriorityQueue->new();
+	  while(my($id2, $d) = each %$id2_dist){
+	    $pq->insert($id2, $dist);
+	    $count++;
+	    if($count >= $n_edges){
+	      $pq->worst(); # shift the 'worst' element, to keep size <= $n_edges.
+	    }
+	  }
+	    
+	}else{
          my @nearest_neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
          my $furthest_id = $nearest_neighbor_ids[-1]; # last one = furthest
          my $furthest_d = $id2_dist->{$furthest_id};
@@ -94,6 +113,7 @@ around BUILDARGS => sub {
                                                furthest_id_distance => [$furthest_id, $id2_dist->{$furthest_id}],
                                               } );
          $id_node->{$id1} = $a_node;
+       }
       }                         # end node construction loop
       return {
               nodes => $id_node,
@@ -145,7 +165,7 @@ print "$id1, $generation, $pedigree \n";
               n_edges => $n_edges,
               distances => \%idA__idB_distance,
              };
-   }                            # end of 
+   }                            # end of
 
   # otherwise do nothing.
 };                              # end of BUILDARGS
