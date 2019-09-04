@@ -3,7 +3,7 @@ use Moose;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
-
+use Inline 'C';
 use constant MISSING_DATA => 'X';
 
 # a class for genotypes
@@ -69,33 +69,38 @@ sub distance{ # calculate distance between this genotype obj. and another
   my $this_gt = $self->sequence();	      # string
   my $other_gt = $other_genotype->sequence(); # string
 
-  my $distance = 0;
-  my $count_both = 0; # count of snps with data present in both sequences
-  my $count_missing = 0; # count of snps with data absent in one or both sequences
-  if (length $this_gt == length $other_gt) {
-    for my $i (0 .. (length $this_gt) - 1) {
-      my $c1 = substr($this_gt, $i, 1);
-      my $c2 = substr($other_gt, $i, 1); # $other_gt->[$i];
-      if ( ($c1 eq MISSING_DATA)  or ($c2 eq MISSING_DATA) ) {
-	$count_missing++;
-      } else {
-	$count_both++;
-	if ($c2 != $c1) {
-	  if ($c1 == 0) {
-	    $distance += $c2 - $c1;
-	  } elsif ($c1 == 1) {
-	    $distance += 1;
-	  } elsif ($c1 == 2) {
-	    $distance += $c1 - $c2;
-	  } else {
-	    die "c1 has unhandled value: $c1 \n";
+  if (1) { # use inline::C function: (much faster)
+    return gg_distance($this_gt, $other_gt);
+  } else { # pure perl. much slower.
+    my $distance = 0;
+    my $count_both = 0; # count of snps with data present in both sequences
+    my $count_missing = 0; # count of snps with data absent in one or both sequences
+    if (length $this_gt == length $other_gt) {
+      for my $i (0 .. (length $this_gt) - 1) {
+	my $c1 = substr($this_gt, $i, 1);
+	my $c2 = substr($other_gt, $i, 1); # $other_gt->[$i];
+	if ( ($c1 eq MISSING_DATA)  or ($c2 eq MISSING_DATA) ) {
+	  $count_missing++;
+	} else {
+	  $count_both++;
+	  if ($c2 != $c1) {
+	    if ($c1 == 0) {
+	      $distance += $c2 - $c1;
+	    } elsif ($c1 == 1) {
+	      $distance += 1;
+	    } elsif ($c1 == 2) {
+	      $distance += $c1 - $c2;
+	    } else {
+	      die "c1 has unhandled value: $c1 \n";
+	    }
 	  }
 	}
       }
     }
+    return ($count_both > 0)? $distance/$count_both : 1000;
   }
-  return ($distance, $count_both, $count_missing);
 }
+
 
 sub mean{
   my $self = shift;
@@ -118,9 +123,74 @@ sub mean{
   }
   return \@mean_gt;
 }
-
 ############################################
 
 __PACKAGE__->meta->make_immutable;
 
 1;
+
+__DATA__
+############################################
+########### inline C stuff #################
+__C__
+
+  /* distance between two genotype strings  */
+double gg_distance(char* str1, char* str2) {
+  int letters = 0;
+  int vowels = 0;
+  int i = 0;
+  char c1;
+char c2;
+ int dist = 0;
+int count = 0;
+  while(c1 = str1[i]) {
+c2 = str2[i];
+
+    if (c1 == '0') {
+
+if(c2 == '0'){
+count++;
+}else if(c2 == '1'){
+dist++;
+count++;
+}else if(c2 == '2'){
+dist += 2;
+count++;
+}
+
+}else if(c1 == '1'){
+
+if(c2 == '0'){
+dist++;
+count++;
+}else if(c2 == '1'){
+count++;
+}else if(c2 == '2'){
+dist += 1;
+count++;
+}
+
+}else if(c1 == '2'){
+
+if(c2 == '0'){
+dist += 2;
+count++;
+}else if(c2 == '1'){
+dist++;
+count++;
+}else if(c2 == '2'){
+count++;
+}
+
+}
+
+i++;
+}
+// printf("%d  %d \n", dist, count);
+if (count > 0) {
+//  printf("%g\n", 1.0*dist/count);
+  return 1.0*dist/count;
+} else
+  return 1000;
+}
+
