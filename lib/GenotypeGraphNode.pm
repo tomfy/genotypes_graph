@@ -59,19 +59,16 @@ sub as_string{
    my $self = shift;
    my $show_sequence = shift // 0;
    my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
-   for my $idB ( @{ $self->nearest_neighbor_ids() } ) {
+   my @nn_ids = sort { $a <=> $b } @{$self->nearest_neighbor_ids()}; # sort by id
+   for my $idB (@nn_ids) {
+     # @{ $self->nearest_neighbor_ids() } ) {
       my $dist = $self->id_distance->{$idB};
       $str .= sprintf("%6d %5.4f  ", $idB, $dist);
    }
- #  $str .= '   ...   ' . join("  ", @{ $self->furthest_id_distance() });
+   $str .= '   ...   ' . join("  ", map($_ // '--', @{ $self->furthest_id_distance() }));
    $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
    return $str;
 }
-
-
-
-
-
 
 ############################################
 
