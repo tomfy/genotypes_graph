@@ -4,7 +4,7 @@ use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
 use Graph;
-use MyPriorityQueue; 
+#use MyPriorityQueue; 
 
 use constant BIG_NUMBER => 1_000_000_000;
 #use constant MULTIPLIER => 1000;
@@ -65,9 +65,7 @@ around BUILDARGS => sub {
             my $id2 = $ids[$i2];
             #    print STDERR "    $i2 $id2 \n";
             my $g2 = $id_gobj{$id2};
-            my $d_ij = $g1->distance($g2);
-            #   print "$id1  $id2  $d_ij \n";
-            my $d = $d_ij; #($both_snp_count > 0)? $d_ij/$both_snp_count : BIG_NUMBER; #
+            my $d = $g1->distance($g2);
             $d_sum += $d;
             $edge_count++;
             if (!exists $idA__idB_distance{$id1}) {
@@ -92,20 +90,28 @@ around BUILDARGS => sub {
 	my $id2_dist = $idA__idB_distance{$id1};
 	my $count = 0;
 	if(1){ # using quickselect algorithm (a bit faster)
-           my @nn_ids = quickselect([keys %$id2_dist], $n_edges, $id2_dist);
+           my @n_ids = quickselect([keys %$id2_dist], $n_edges, $id2_dist);
        #    my $furthest_id = undef; # last one = furthest
        #  my $furthest_d = undef; # $id2_dist->{$furthest_id};
-        #   @nn_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @nn_ids;
-           my %nnid2_dist = map(($_ => $id2_dist->{$_}), @nn_ids); # hash w ids, distances for just nearest $n_edges
-         my $a_node = GenotypeGraphNode->new( {
-                                               id => $id1,
-                                               genotype => $id_gobj{$id1}, # genotype object
-                                               nearest_neighbor_ids => \@nn_ids,
-                                               id_distance => \%nnid2_dist,
-                                               furthest_id_distance => [undef, undef],
-                                              } );
+        #   @n_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @n_ids;
+           my %nid2_dist = map(($_ => $id2_dist->{$_}), @n_ids); # hash w ids, distances for just nearest $n_edges
+	   for(1..5){
+	     my $extra_id = (keys %$id2_dist)[int(rand keys %$id2_dist)];
+	     if (! exists $nid2_dist{$extra_id}) {
+	       push @n_ids, $extra_id;
+	       $nid2_dist{$extra_id} = $id2_dist->{$extra_id};
+	       last;
+	     }
+	   }
+	   my $a_node = GenotypeGraphNode->new( {
+						 id => $id1,
+						 genotype => $id_gobj{$id1}, # genotype object
+						 neighbor_ids => \@n_ids,
+						 id_distance => \%nid2_dist,
+						 #         furthest_id_distance => [undef, undef],
+						} );
 	   $id_node->{$id1} = $a_node;
-	   
+
 	}else{ # sorting whole set of distances (a bit slower)
          my @nearest_neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
          my $furthest_id = $nearest_neighbor_ids[-1]; # last one = furthest
@@ -115,9 +121,9 @@ around BUILDARGS => sub {
          my $a_node = GenotypeGraphNode->new( {
                                                id => $id1,
                                                genotype => $id_gobj{$id1}, # genotype object
-                                               nearest_neighbor_ids => \@nearest_neighbor_ids,
+                                               neighbor_ids => \@nearest_neighbor_ids,
                                                id_distance => $id2_dist,
-                                               furthest_id_distance => [$furthest_id, $id2_dist->{$furthest_id}],
+                                      #        furthest_id_distance => [$furthest_id, $id2_dist->{$furthest_id}],
                                               } );
          $id_node->{$id1} = $a_node;
        }
@@ -161,9 +167,9 @@ print "$id1, $generation, $pedigree \n";
          my $a_node = GenotypeGraphNode->new( {
                                                id => $id1,
                                                genotype => $gobj, # genotype object
-                                               nearest_neighbor_ids => \@nearest_neighbor_ids,
+                                               neighbor_ids => \@nearest_neighbor_ids,
                                                id_distance => $id2_dist,
-                                               furthest_id_distance => [$furthest_id, $furthest_d],
+                                    #           furthest_id_distance => [$furthest_id, $furthest_d],
                                               } );
          $id_node->{$id1} = $a_node;
       }

@@ -16,7 +16,7 @@ has id => (
            required => 1,
           );
 
-has nearest_neighbor_ids => (
+has neighbor_ids => (
                              isa => 'ArrayRef',
                              is => 'ro',
                              required => 1,
@@ -28,10 +28,10 @@ has id_distance => (
                     required => 1,
                    );
 
-has furthest_id_distance => (
-                             isa => 'ArrayRef',
-                             is => 'ro',
-                             );
+# has furthest_id_distance => (
+#                              isa => 'ArrayRef',
+#                              is => 'ro',
+#                              );
 
 has genotype => (
                  isa => 'Object',
@@ -43,7 +43,7 @@ has genotype => (
 sub BUILD {
    my $self = shift;
    my %nearestid_distance = ();
-   for my $idB (@{$self->nearest_neighbor_ids()}) {
+   for my $idB (@{$self->neighbor_ids()}) {
  #     print "idB:  $idB \n";
       $nearestid_distance{$idB} = $self->id_distance()->{$idB};
    }
@@ -59,15 +59,21 @@ sub as_string{
    my $self = shift;
    my $show_sequence = shift // 0;
    my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
-   my @nn_ids = sort { $a <=> $b } @{$self->nearest_neighbor_ids()}; # sort by id
+   my @nn_ids =
+    #  sort { $a <=> $b }  # uncomment to sort
+     @{$self->neighbor_ids()}; # sort by id
    for my $idB (@nn_ids) {
      # @{ $self->nearest_neighbor_ids() } ) {
       my $dist = $self->id_distance->{$idB};
       $str .= sprintf("%6d %5.4f  ", $idB, $dist);
    }
-   $str .= '   ...   ' . join("  ", map($_ // '--', @{ $self->furthest_id_distance() }));
+#   $str .= '   ...   ' . join("  ", map($_ // '--', @{ $self->furthest_id_distance() }));
    $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
    return $str;
+ }
+
+sub recursive_generate_tree{
+
 }
 
 ############################################
