@@ -25,13 +25,13 @@ has n_edges => (
                 default => BIG_NUMBER, # -> keep all edges.
                );
 
-has distances => (
+has distances => ( # all N choose 2 distances (edge weights)
                   isa => 'HashRef',
                   is => 'rw',
                   default => sub { {} },
                  );
 
-has Graph_object => (
+has Graph_object => ( #
 		     isa => 'Object',
 		     is => 'rw',
 		     default => sub { Graph->new() },
@@ -65,9 +65,9 @@ around BUILDARGS => sub {
             my $id2 = $ids[$i2];
             #    print STDERR "    $i2 $id2 \n";
             my $g2 = $id_gobj{$id2};
-            my ($d_ij, $both_snp_count) = $g1->distance($g2);
+            my $d_ij = $g1->distance($g2);
             #   print "$id1  $id2  $d_ij \n";
-            my $d = ($both_snp_count > 0)? $d_ij/$both_snp_count : BIG_NUMBER; #
+            my $d = $d_ij; #($both_snp_count > 0)? $d_ij/$both_snp_count : BIG_NUMBER; #
             $d_sum += $d;
             $edge_count++;
             if (!exists $idA__idB_distance{$id1}) {
@@ -90,18 +90,12 @@ around BUILDARGS => sub {
 
       while ( my ($i, $id1) = each @ids) {
 	my $id2_dist = $idA__idB_distance{$id1};
-#print "id1: $id1  id2s: ", join(' ', keys %$id2_dist), "\n";
 	my $count = 0;
-#exit;
-	if(1){
-	   my $pq = MyPriorityQueue->new();
-           my @nn_ids = $pq->quickselect([keys %$id2_dist], $n_edges, $id2_dist); 
-#print "XXX:  ", join(' ', @nn_ids), " \n";
-#print "nn ids: ", join(' ', @nn_ids), "\n";
-           my $furthest_id = undef; # last one = furthest
-         my $furthest_d = undef; # $id2_dist->{$furthest_id};
+	if(1){ # using quickselect algorithm (a bit faster)
+           my @nn_ids = quickselect([keys %$id2_dist], $n_edges, $id2_dist);
+       #    my $furthest_id = undef; # last one = furthest
+       #  my $furthest_d = undef; # $id2_dist->{$furthest_id};
         #   @nn_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @nn_ids;
-        #  @nearest_neighbor_ids = @nearest_neighbor_ids[0 .. $n_edges-1] if($n_edges < scalar keys %$id2_dist);
            my %nnid2_dist = map(($_ => $id2_dist->{$_}), @nn_ids); # hash w ids, distances for just nearest $n_edges
          my $a_node = GenotypeGraphNode->new( {
                                                id => $id1,
@@ -110,15 +104,13 @@ around BUILDARGS => sub {
                                                id_distance => \%nnid2_dist,
                                                furthest_id_distance => [undef, undef],
                                               } );
-         $id_node->{$id1} = $a_node;
-#exit;
-	}else{
+	   $id_node->{$id1} = $a_node;
+	   
+	}else{ # sorting whole set of distances (a bit slower)
          my @nearest_neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
          my $furthest_id = $nearest_neighbor_ids[-1]; # last one = furthest
          my $furthest_d = $id2_dist->{$furthest_id};
          @nearest_neighbor_ids = @nearest_neighbor_ids[0 .. $n_edges-1] if($n_edges < scalar keys %$id2_dist);
-my @flat_hash =  map(($_ => $id2_dist->{$_}), @nearest_neighbor_ids);
-#print "flast hash: ", join(' ', @flat_hash), "\n";
          my %nnid2_dist = map(($_ => $id2_dist->{$_}), @nearest_neighbor_ids); # hash w ids, distances for just nearest $n_edges
          my $a_node = GenotypeGraphNode->new( {
                                                id => $id1,
@@ -218,43 +210,73 @@ sub distance_matrix_as_string{
       $d_matrix_string .= sprintf("%2d  %s\n", $id1, join(" ", map (int($multiplier*$id2_dist->{$_} + 0.5), @id2s[$i..$n_nodes-2]) ) );
    }
    return $d_matrix_string;
+ }
+
+sub spanning_tree{ # construct a spanning tree (not minimal)
+  my $self = shift;
+  my $nodes = $self->nodes();
+  my @nodes_list = keys %$nodes;
+  my $root_node_id = $nodes_list[ rand( scalar @nodes_list ) ]; # get (id of) a random node
+  my %used_ids = ();
+  my %stedges;
+
 }
 
-# sub BUILD{
-#    my $self = shift;
-#    my $args = shift;         # a hash ref {'id12dist' => 
-#    my $id_sequence = $args->{'id_sequence'};
 
-#    #########################################################
+####   ordinary subroutines  ###
 
+sub quickselect{ # 
+  my $id_list = shift;
+  my $k = shift;
+ my $id_distance = shift; # hash ref of all N-1 id:distance pairs.
 
+ #   print "id_list: ", join(' ', @$id_list), "  k: $k \n";
+my $rand_index =  
+# int ( 0.5*@$id_list ) ;
+  int rand @$id_list;
+#  int (0.5* (rand @{ $id_list } + rand @{$id_list}));
+#  int (0.333* (rand @{ $id_list } + rand @{$id_list} + rand @{$id_list})) - 1;
+#  int (0.4*@$id_list + 0.2*rand @$id_list) - 1;
 
-#    #####################################################
+  my $pivot_id = $id_list->[$rand_index ]; 
+  my $pivot = $id_distance->{$pivot_id};
 
-#    my $id12dist = $args->{'id12dist'};
-#    #   $self->n_edges($args->{'n_edges'});
-#    my $n_edges = $self->n_edges();
-#    while (my($id1, $id2_dist) = each %$id12dist) {
-#       my @nearest_neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
-#       my $furthest_id = $nearest_neighbor_ids[-1]; # last one = furthest
-#       my $furthest_d = $id2_dist->{$furthest_id};
-#       #   print STDERR "$id1 ...  $furthest_id  $furthest_d \n";
-#       @nearest_neighbor_ids = @nearest_neighbor_ids[0 .. $n_edges-1] if($n_edges > 0 and $n_edges < scalar keys %$id2_dist);
-#       my $a_node = GenotypeGraphNode->new( {
-#                                             id => $id1,
-#                                             nearest_neighbor_ids => \@nearest_neighbor_ids,
-#                                             id_distance => $id2_dist,
-#                                             furthest_id_distance => [$furthest_id => $id2_dist->{$furthest_id}],
-#                                            } );
-#       $self->nodes()->{$id1} = $a_node;
-#       #  print "Node as string:  ", $a_node->as_string(), "\n";
-#    }
-# }            
-# end BUILD
+  my @lefts = (); my @rights = (); my @equals = ();
+  if (0) { # use built-in grep, but run through array 2 (or sometimes 3) times; a bit slower.
+    @lefts  = grep { $id_distance->{$_} < $pivot } @$id_list;
+    @rights = grep { $id_distance->{$_} > $pivot } @$id_list;
+    # my @equals = grep { $_ == $pivot } @$list;
+    # my @equals = ();
+    if (@lefts + @rights + 1 == scalar @$id_list) {
+      push @equals, $pivot_id;
+    } else {
+      @equals = grep { $id_distance->{$_} == $pivot } @$id_list;
+    }
+  } else { # a bit faster
+    for (@$id_list) { # store in separate arrays the ids with distance <, ==, and > the pivot 
+      if ($id_distance->{$_} < $pivot) {
+	push @lefts, $_;
+      } elsif ($id_distance->{$_} > $pivot) {
+	push @rights, $_;
+      } else {
+	push @equals, $_;
+      }
+    }
+ }
 
-
-
-
+  if ($k < @lefts) {  # kth will be in @lefts, but lefts has too many.
+    return quickselect(\@lefts, $k, $id_distance);
+  } elsif ($k > @lefts + @equals) { # kth will be in @rights
+    return ((@lefts, @equals), quickselect(\@rights, $k - @lefts - @equals, $id_distance));
+  } elsif ($k == @lefts) {	# done 
+    return @lefts;
+  } elsif ($k <= @lefts + @equals) { # just @lefts plus 1 or more from @equals
+    push @lefts, @equals[0..$k-@lefts-1];
+    return @lefts;
+  } else {
+    die "???\n";
+  }
+}
 
 ###########################################
 __PACKAGE__->meta->make_immutable;
