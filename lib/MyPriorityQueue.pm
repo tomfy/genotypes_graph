@@ -7,7 +7,7 @@ use warnings;
 
 sub new {
   my $classname = shift;
-  print $classname, "\n";
+ # print $classname, "\n";
   my $size_limit = shift;
   return bless {
 		queue => [],
@@ -50,54 +50,81 @@ sub get_size {
   return scalar @{$self->{queue}};
 }
 
-sub size_limited_array_insert{
+sub quickselect{ # 
   my $self = shift;
-  my $id_dist = shift; # hash ref of id:distance pairs.
-  my $k = shift;
   my $id_list = shift;
+  my $k = shift;
+ my $id_distance = shift; # hash ref of id:distance pairs.
 
-  #  print "list: ", join(' ', @$list), "  k: $k \n";
-  my $pivot_id = int rand @$id_list - 1; #int (0.5* (rand @{ $list } + rand @{$list})) - 1;
-  my $pivot = $id_dist->{$pivot_id};
+ #   print "id_list: ", join(' ', @$id_list), "  k: $k \n";
+my $rand_index =  
+# int ( 0.5*@$id_list ) ;
+#  int rand @$id_list;
+  int (0.5* (rand @{ $id_list } + rand @{$id_list}));
+#  int (0.333* (rand @{ $id_list } + rand @{$id_list} + rand @{$id_list})) - 1;
+#  int (0.4*@$id_list + 0.2*rand @$id_list) - 1;
+#print "n ids in list: ", scalar @$id_list, "  $rand_index \n";
+
+#print join(' ', keys %$id_distance), "\n";
+  my $pivot_id = $id_list->[$rand_index ]; 
+  
+#exit;
+  my $pivot = $id_distance->{$pivot_id};
 
   my @lefts = (); my @rights = (); my @equals = ();
-  if (1) {
-    @lefts  = grep { $id_dist->{$_} < $pivot } @$id_list;
-    @rights = grep { $id_dist->{$_} > $pivot } @$id_list;
+  if (0) {
+    @lefts  = grep { $id_distance->{$_} < $pivot } @$id_list;
+    @rights = grep { $id_distance->{$_} > $pivot } @$id_list;
     # my @equals = grep { $_ == $pivot } @$list;
     # my @equals = ();
-    if (@lefts + @rights + 1 == scalar @$list) {
-      push @equals, $pivot;
+    if (@lefts + @rights + 1 == scalar @$id_list) {
+      push @equals, $pivot_id;
     } else {
-      @equals = grep { $_ == $pivot } @$list;
+      @equals = grep { $id_distance->{$_} == $pivot } @$id_list;
     }
   } else {
- 
-    for (@$id_list) {
-      if (id_dist->{$_} < $pivot) {
+    for (@$id_list) { # store in separate arrays the ids with distance <, ==, and > the pivot 
+      if ($id_distance->{$_} < $pivot) {
 	push @lefts, $_;
-      } elsif ($_ > $pivot) {
+      } elsif ($id_distance->{$_} > $pivot) {
 	push @rights, $_;
       } else {
 	push @equals, $_;
       }
     }
-  }
+ }
+# my @xs = map($_ . " " . $id_distance->{$_} . "    ", @$id_list);
+# print "k:  $k   AAA: ", join(' ', @xs), "\n";
+# print "pivot: $pivot \n";
+# print "Ls: ", join(' ', @lefts), "\n";
+# print "Rs: ", join(' ', @rights), "\n";
+# print "Eqs: ", join(' ', @equals), "\n";
+
+# exit;
   if ($k < @lefts) {  # kth will be in @lefts, but lefts has too many.
-    return qselect_x(\@lefts, $k);
+    return $self->quickselect(\@lefts, $k, $id_distance);
   } elsif ($k > @lefts + @equals) { # kth will be in @rights
-    return ((@lefts, @equals), qselect_x(\@rights, $k - @lefts - @equals));
+    return ((@lefts, @equals), $self->quickselect(\@rights, $k - @lefts - @equals, $id_distance));
   } elsif ($k == @lefts) {	# done 
     return @lefts;
   } elsif ($k <= @lefts + @equals) { # just @lefts plus 1 or more from @equals
-    push @lefts, @equals[0..$k-@lefts-1];
-    return @lefts;
+ #   push @lefts, @equals[0..$k-@lefts-1];
+#    return @lefts;
+return (@lefts, @equals[0..$k-@lefts-1]);
   } else {
     die "???\n";
   }
 }
 
-
+sub size_limited_array_insert{
+   my $self = shift;
+   my $id_distance = shift;
+   my $k = shift;
+   my @ids = keys %$id_distance;
+   my $top_k_ids = $self->quick_select(\@ids, $k, $id_distance);
+   for my $topid (@$top_k_ids) {
+      $self->insert($topid, $id_distance->{$topid}); # 
+   }
 }
 
 sub size_limited_insert{

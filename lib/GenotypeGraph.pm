@@ -4,6 +4,7 @@ use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
 use Graph;
+use MyPriorityQueue; 
 
 use constant BIG_NUMBER => 1_000_000_000;
 #use constant MULTIPLIER => 1000;
@@ -89,22 +90,36 @@ around BUILDARGS => sub {
 
       while ( my ($i, $id1) = each @ids) {
 	my $id2_dist = $idA__idB_distance{$id1};
+#print "id1: $id1  id2s: ", join(' ', keys %$id2_dist), "\n";
 	my $count = 0;
+#exit;
 	if(1){
-	   my $pq = List::PriorityQueue->new();
-	  while(my($id2, $d) = each %$id2_dist){
-	    $pq->insert($id2, $dist);
-	    $count++;
-	    if($count >= $n_edges){
-	      $pq->worst(); # shift the 'worst' element, to keep size <= $n_edges.
-	    }
-	  }
-	    
+	   my $pq = MyPriorityQueue->new();
+           my @nn_ids = $pq->quickselect([keys %$id2_dist], $n_edges, $id2_dist); 
+#print "XXX:  ", join(' ', @nn_ids), " \n";
+#print "nn ids: ", join(' ', @nn_ids), "\n";
+           my $furthest_id = undef; # last one = furthest
+         my $furthest_d = undef; # $id2_dist->{$furthest_id};
+        #   @nn_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @nn_ids;
+        #  @nearest_neighbor_ids = @nearest_neighbor_ids[0 .. $n_edges-1] if($n_edges < scalar keys %$id2_dist);
+           my %nnid2_dist = map(($_ => $id2_dist->{$_}), @nn_ids); # hash w ids, distances for just nearest $n_edges
+         my $a_node = GenotypeGraphNode->new( {
+                                               id => $id1,
+                                               genotype => $id_gobj{$id1}, # genotype object
+                                               nearest_neighbor_ids => \@nn_ids,
+                                               id_distance => \%nnid2_dist,
+                                               furthest_id_distance => [undef, undef],
+                                              } );
+         $id_node->{$id1} = $a_node;
+#exit;
 	}else{
          my @nearest_neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
          my $furthest_id = $nearest_neighbor_ids[-1]; # last one = furthest
          my $furthest_d = $id2_dist->{$furthest_id};
          @nearest_neighbor_ids = @nearest_neighbor_ids[0 .. $n_edges-1] if($n_edges < scalar keys %$id2_dist);
+my @flat_hash =  map(($_ => $id2_dist->{$_}), @nearest_neighbor_ids);
+#print "flast hash: ", join(' ', @flat_hash), "\n";
+         my %nnid2_dist = map(($_ => $id2_dist->{$_}), @nearest_neighbor_ids); # hash w ids, distances for just nearest $n_edges
          my $a_node = GenotypeGraphNode->new( {
                                                id => $id1,
                                                genotype => $id_gobj{$id1}, # genotype object

@@ -58,12 +58,12 @@ sub BUILD {
 sub as_string{
    my $self = shift;
    my $show_sequence = shift // 0;
-   my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . ' ';
+   my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
    for my $idB ( @{ $self->nearest_neighbor_ids() } ) {
       my $dist = $self->id_distance->{$idB};
-      $str .= "   $idB  $dist";
+      $str .= sprintf("%6d %5.4f  ", $idB, $dist);
    }
-   $str .= '   ...   ' . join("  ", @{ $self->furthest_id_distance() });
+ #  $str .= '   ...   ' . join("  ", @{ $self->furthest_id_distance() });
    $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
    return $str;
 }

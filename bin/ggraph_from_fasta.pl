@@ -29,6 +29,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
    my $output_graph = 1; # whether to output the graph (.grph filename ending0
    my $multiplier = 10000; # controls # significant digits. 10000 -> 0.6492361... is output as 6492
    my $show_sequence = 0; # if true, will output the sequence at the end of line.
+srand(123457);
    GetOptions(
               'input_filename=s' => \$input_filename,
               'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
