@@ -29,7 +29,9 @@ use TomfyMisc qw ' fasta2seqon1line ';
    my $output_graph = 1; # whether to output the graph (.grph filename ending0
    my $multiplier = 10000; # controls # significant digits. 10000 -> 0.6492361... is output as 6492
    my $show_sequence = 0; # if true, will output the sequence at the end of line.
-   srand(123457);
+   my $n_extras = 0; # number of extra 'neighbors' to give each node, in addition to the $n_nearest_to_keep nearest nodes.
+   
+   srand(1234579);
    GetOptions(
               'input_filename=s' => \$input_filename,
               'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
@@ -37,6 +39,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
               'graph_out!' => \$output_graph,
               'multiplier=i' => \$multiplier,
               'sequence_out!' => \$show_sequence,
+	      'extras=i' => \$n_extras,
              );
 
    my $input_filename_stem = $input_filename;
@@ -67,12 +70,16 @@ use TomfyMisc qw ' fasta2seqon1line ';
       my $fasta_string = TomfyMisc::fasta2seqon1line($input_string);
       $genotype_graph = GenotypeGraph->new(
                                            { fasta => $fasta_string,
-                                             n_edges => $n_nearest_to_keep }
+                                             n_near => $n_nearest_to_keep,
+					     n_extras => $n_extras,
+					   }
                                           );
    } elsif ($input_filename =~ /\.grph/) {
       $genotype_graph = GenotypeGraph->new(
                                            { idnnd => $input_string,
-                                             n_edges => $n_nearest_to_keep }
+                                             n_near => $n_nearest_to_keep,
+					     n_extras => $n_extras,
+					   }
                                           );
    }
 

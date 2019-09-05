@@ -101,7 +101,6 @@ sub distance{ # calculate distance between this genotype obj. and another
   }
 }
 
-
 sub mean{
   my $self = shift;
   my $other_genotype = shift;
