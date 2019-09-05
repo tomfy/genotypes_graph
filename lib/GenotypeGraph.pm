@@ -89,40 +89,33 @@ around BUILDARGS => sub {
       while ( my ($i, $id1) = each @ids) {
 	my $id2_dist = $idA__idB_distance{$id1};
 	my $count = 0;
-	if(1){ # using quickselect algorithm (a bit faster)
-           my @n_ids = quickselect([keys %$id2_dist], $n_edges, $id2_dist);
-       #    my $furthest_id = undef; # last one = furthest
-       #  my $furthest_d = undef; # $id2_dist->{$furthest_id};
-        #   @n_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @n_ids;
-           my %nid2_dist = map(($_ => $id2_dist->{$_}), @n_ids); # hash w ids, distances for just nearest $n_edges
-	   for(1..5){
-	     my $extra_id = (keys %$id2_dist)[int(rand keys %$id2_dist)];
-	     if (! exists $nid2_dist{$extra_id}) {
-	       push @n_ids, $extra_id;
-	       $nid2_dist{$extra_id} = $id2_dist->{$extra_id};
-	       last;
-	     }
-	   }
+	if(0){ # using quickselect algorithm (a bit faster)
+           my @neighbor_ids = quickselect([keys %$id2_dist], $n_edges, $id2_dist);
+        #   @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
+           my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_edges
+           get_extra_id($id2_dist, \@neighbor_ids, \%neighborid_dist);
+
 	   my $a_node = GenotypeGraphNode->new( {
 						 id => $id1,
 						 genotype => $id_gobj{$id1}, # genotype object
-						 neighbor_ids => \@n_ids,
-						 id_distance => \%nid2_dist,
+						 neighbor_ids => \@neighbor_ids,
+						 id_distance => \%neighborid_dist,
 						 #         furthest_id_distance => [undef, undef],
 						} );
 	   $id_node->{$id1} = $a_node;
 
 	}else{ # sorting whole set of distances (a bit slower)
-         my @nearest_neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
-         my $furthest_id = $nearest_neighbor_ids[-1]; # last one = furthest
-         my $furthest_d = $id2_dist->{$furthest_id};
-         @nearest_neighbor_ids = @nearest_neighbor_ids[0 .. $n_edges-1] if($n_edges < scalar keys %$id2_dist);
-         my %nnid2_dist = map(($_ => $id2_dist->{$_}), @nearest_neighbor_ids); # hash w ids, distances for just nearest $n_edges
+         my @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
+ #        my $furthest_id = $neighbor_ids[-1]; # last one = furthest
+#         my $furthest_d = $id2_dist->{$furthest_id};
+         @neighbor_ids = @neighbor_ids[0 .. $n_edges-1] if($n_edges < scalar keys %$id2_dist);
+         my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_edges
+         get_extra_id($id2_dist, \@neighbor_ids, \%neighborid_dist);
          my $a_node = GenotypeGraphNode->new( {
                                                id => $id1,
                                                genotype => $id_gobj{$id1}, # genotype object
-                                               neighbor_ids => \@nearest_neighbor_ids,
-                                               id_distance => $id2_dist,
+                                               neighbor_ids => \@neighbor_ids,
+                                               id_distance => \%neighborid_dist,
                                       #        furthest_id_distance => [$furthest_id, $id2_dist->{$furthest_id}],
                                               } );
          $id_node->{$id1} = $a_node;
@@ -190,6 +183,11 @@ sub get_node_by_id{
    return $self->nodes()->{$id};
 }
 
+sub search_for_best_match{ 
+   my $self = shift;
+   my $gobj = shift; # Genotype object
+   my $rand_id = {$self->nodes()}
+
 sub as_string{
    my $self = shift;
    my $show_sequences = shift;
@@ -218,18 +216,24 @@ sub distance_matrix_as_string{
    return $d_matrix_string;
  }
 
-sub spanning_tree{ # construct a spanning tree (not minimal)
-  my $self = shift;
-  my $nodes = $self->nodes();
-  my @nodes_list = keys %$nodes;
-  my $root_node_id = $nodes_list[ rand( scalar @nodes_list ) ]; # get (id of) a random node
-  my %used_ids = ();
-  my %stedges;
-
-}
-
-
 ####   ordinary subroutines  ###
+
+sub get_extra_id{
+   my $id2_dist = shift;
+   my $near_ids = shift;
+   my $nearid_dist = shift;
+   my $n_try = shift // 5;
+   for (1..$n_try) {
+      my $extra_id = 
+    #    (keys %$id2_dist)[int(rand keys %$id2_dist)];
+        (keys %$id2_dist)[0 - $_];
+      if (! exists $nearid_dist->{$extra_id}) {
+         push @$near_ids, $extra_id;
+         $nearid_dist->{$extra_id} = $id2_dist->{$extra_id};
+         last;
+      }
+   }
+}
 
 sub quickselect{ # 
   my $id_list = shift;

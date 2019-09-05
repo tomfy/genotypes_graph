@@ -10,6 +10,12 @@ use List::Util qw ( min max sum );
 # id/distance pairs holding the ids and distances to
 # other nodes to which there is a directed edge.
 
+has graph => (
+              isa => 'Object',
+              is => 'rw',
+              required => 0,
+              );
+
 has id => (
            isa => 'Int',
            is => 'ro',
@@ -22,7 +28,7 @@ has neighbor_ids => (
                              required => 1,
                             );
 
-has id_distance => (
+has id_distance => ( # should this be just the neighbors? or everything?
                     isa => 'HashRef',
                     is => 'rw',
                     required => 1,
@@ -60,7 +66,7 @@ sub as_string{
    my $show_sequence = shift // 0;
    my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
    my @nn_ids =
-    #  sort { $a <=> $b }  # uncomment to sort
+  #    sort { $a <=> $b }  # uncomment to sort
      @{$self->neighbor_ids()}; # sort by id
    for my $idB (@nn_ids) {
      # @{ $self->nearest_neighbor_ids() } ) {
@@ -72,9 +78,6 @@ sub as_string{
    return $str;
  }
 
-sub recursive_generate_tree{
-
-}
 
 ############################################
 
