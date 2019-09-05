@@ -65,6 +65,7 @@ around BUILDARGS => sub {
 	#    print STDERR "    $i2 $id2 \n";
 	my $g2 = $id_gobj{$id2};
 	my $d = $g1->distance($g2);
+	$d += 1e-6*($id2 + $id1); ##########
 	$d_sum += $d;
 	$edge_count++;
 	if (!exists $idA__idB_distance{$id1}) {
@@ -90,12 +91,17 @@ around BUILDARGS => sub {
       my $id2_dist = $idA__idB_distance{$id1};
       my $count = 0;
       my @neighbor_ids;
-      if (1) {		  # using quickselect algorithm (a bit faster)
+      my $m = 'qsel';
+      if ($m eq 'qsel') {		  # using quickselect algorithm (a bit faster)
 	@neighbor_ids = quickselect([keys %$id2_dist], $n_near, $id2_dist);
 	@neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
-      } else {
+      } elsif($m eq 'sort') { # sort the whole set of nodes (a bit slower)
 	@neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
 	@neighbor_ids = @neighbor_ids[0 .. $n_near-1] if($n_near < scalar keys %$id2_dist);
+      }else{ # a bit faster than qsel
+	my $pq = MyPriorityQueue->new($n_near);
+	$pq->size_limited_hash_insert($id2_dist);
+	@neighbor_ids = @{ $pq->{queue} };
       }
       my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
       get_extra_ids($id2_dist, \@neighbor_ids, \%neighborid_dist, $n_extras);
@@ -172,7 +178,6 @@ sub BUILD {
     #  $node_obj->graph($self); # can't do this because graph is read-only, but
     $node_obj->{graph} = $self; # can do it this way.
   }
-
 }
 
 sub get_node_by_id{
@@ -183,9 +188,13 @@ sub get_node_by_id{
 
 sub search_for_best_match{
   my $self = shift;
-  my $gobj = shift;		# Genotype object
+  my $gobj = shift;		# Genotype object to match
+  my $pq_size_limit = shift // 100;
   #  my $rand_id = {$self->nodes()};
-
+  my $pq_ch = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes; neighbors have been checked.
+  my $pq_un = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes; neighbors have not (all) been checked.
+  my $init_node_id = (keys %{$self->nodes()})[ int(rand(keys  %{$self->nodes()})) ];
+  print "id to search for: ", $gobj->id(), "   init node id:   $init_node_id \n";
 }
 
 sub as_string{
@@ -242,7 +251,6 @@ sub quickselect{		# get the nearest $k ids.
   my $k = shift;	      # find this many.
   my $id_distance = shift;    # hash ref of all N-1 id:distance pairs.
 
-  my $rand_index = int rand @$id_list;
   my $pivot_id = $id_list->[ int(rand(@$id_list)) ];
   my $pivot = $id_distance->{$pivot_id};
 
