@@ -10,11 +10,11 @@ use List::Util qw ( min max sum );
 # id/distance pairs holding the ids and distances to
 # other nodes to which there is a directed edge.
 
-has graph => (
+has graph => (	 # the GenotypeGraph object to which this node belongs
               isa => 'Object',
-              is => 'rw',
+              is => 'ro',
               required => 0,
-              );
+	     );
 
 has id => (
            isa => 'Int',
@@ -23,60 +23,50 @@ has id => (
           );
 
 has neighbor_ids => (
-                             isa => 'ArrayRef',
-                             is => 'ro',
-                             required => 1,
-                            );
+		     isa => 'ArrayRef',
+		     is => 'ro',
+		     required => 1,
+		    );
 
-has id_distance => ( # should this be just the neighbors? or everything?
+has neighbor_id_distance => (		# should be just the neighbors. 
                     isa => 'HashRef',
                     is => 'rw',
                     required => 1,
                    );
 
-# has furthest_id_distance => (
-#                              isa => 'ArrayRef',
-#                              is => 'ro',
-#                              );
-
 has genotype => (
                  isa => 'Object',
                  is => 'ro',
                  required => 1,
-                 );
+		);
 
 
-sub BUILD {
-   my $self = shift;
-   my %nearestid_distance = ();
-   for my $idB (@{$self->neighbor_ids()}) {
- #     print "idB:  $idB \n";
-      $nearestid_distance{$idB} = $self->id_distance()->{$idB};
-   }
-#    my $furthest_id = $self->nearest_neighbor_ids()->[-1];
-#    my $furthest_distance = $self->id_distance()->{$furthest_id};
-# print STDERR $self->{id}, "    ", $self->furthest_id_distance->[0], "   ",  $self->furthest_id_distance()->[1], " \n";
-   $self->id_distance(\%nearestid_distance);
- #  $self->{furthest_id_distance} = [$furthest_id => $furthest_distance];
-   return $self;
-}
+# sub BUILD {
+#   my $self = shift;
+#   my %nearestid_distance = ();
+#   for my $idB (@{$self->neighbor_ids()}) {
+#     #     print "idB:  $idB \n";
+#     $nearestid_distance{$idB} = $self->neighbor_id_distance()->{$idB};
+#   }
+#   $self->neighbor_id_distance(\%nearestid_distance);
+#   #  $self->{furthest_id_distance} = [$furthest_id => $furthest_distance];
+#   return $self;
+# }
 
 sub as_string{
-   my $self = shift;
-   my $show_sequence = shift // 0;
-   my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
-   my @nn_ids =
-  #    sort { $a <=> $b }  # uncomment to sort
-     @{$self->neighbor_ids()}; # sort by id
-   for my $idB (@nn_ids) {
-     # @{ $self->nearest_neighbor_ids() } ) {
-      my $dist = $self->id_distance->{$idB};
-      $str .= sprintf("%6d %5.4f  ", $idB, $dist);
-   }
-#   $str .= '   ...   ' . join("  ", map($_ // '--', @{ $self->furthest_id_distance() }));
-   $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
-   return $str;
- }
+  my $self = shift;
+  my $show_sequence = shift // 0;
+  my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
+  my @nn_ids =
+    #    sort { $a <=> $b }  # uncomment to sort
+    @{$self->neighbor_ids()};	# sort by id
+  for my $idB (@nn_ids) {
+    my $dist = $self->neighbor_id_distance->{$idB};
+    $str .= sprintf("%4d %5.4f  ", $idB, $dist);
+  }
+  $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
+  return $str;
+}
 
 
 ############################################
