@@ -4,35 +4,42 @@ our $VERSION = '0.01';
 
 use strict;
 use warnings;
+use constant BIG_NUMBER => 1_000_000_000;
+use Carp::Assert;
 
 sub new {
   my $classname = shift;
  # print $classname, "\n";
-  my $size_limit = shift;
+  my $size_limit = shift // undef;
   return bless {
-		queue => [],
-		prios => {},	# by payload
-		size_limit => undef,
+		queue => [], # payloads, in order from best [0] to worst [-1]
+		priority => {},	# keys: payloads, values: priorities
+		size_limit => $size_limit,
 	       }, $classname;
-  
 }
 
-sub best {	  # shift the 'best' (highest priority) element queue.
-  my ($self) = @_;
-  if (@{$self->{queue}} == 0) {
-    return undef;
-  }
-  delete($self->{prios}->{$self->{queue}->[0]});
-  return shift(@{$self->{queue}});
-}
-
-sub worst { # pop the 'worst' (lowest priority) element off the queue.
+sub best {  # shift the 'best' (highest priority) element queue.
   my ($self) = @_;
   if (@{$self->{queue}} == 0) {
     return (undef, undef);
   }
-  my $worst_priority = delete($self->{prios}->{$self->{queue}->[-1]});
+  my $best_priority = delete($self->{priority}->{$self->{queue}->[0]});
+  return (shift(@{$self->{queue}}), $best_priority);
+}
+
+sub worst {  # pop the 'worst' (lowest priority) element off the queue.
+  my ($self) = @_;
+  if (@{$self->{queue}} == 0) {
+    return (undef, undef);
+  }
+  my $worst_priority = delete($self->{priority}->{$self->{queue}->[-1]});
   return (pop(@{$self->{queue}}), $worst_priority);
+}
+
+sub i_th_best{ # returns the specified payload by priority (0: best, 1: next best, etc.) Does not delete from queue.
+  my $self = shift;
+  my $i = shift;
+  return ($i >= 0  and  $i < @{$self->{queue}} )? $self->{queue}->[$i] : undef;
 }
 
 sub set_size_limit{
@@ -50,85 +57,50 @@ sub get_size {
   return scalar @{$self->{queue}};
 }
 
-sub quickselect{ # doesn't really belong in PriorityQueue class.
+sub size_limited_hash_insert{ # put a hash ref of payload, priority pairs into pq.
   my $self = shift;
-  my $id_list = shift;
-  my $k = shift;
- my $id_distance = shift; # hash ref of all N-1 id:distance pairs.
-
- #   print "id_list: ", join(' ', @$id_list), "  k: $k \n";
-my $rand_index =  
-# int ( 0.5*@$id_list ) ;
-  int rand @$id_list;
-#  int (0.5* (rand @{ $id_list } + rand @{$id_list}));
-#  int (0.333* (rand @{ $id_list } + rand @{$id_list} + rand @{$id_list})) - 1;
-#  int (0.4*@$id_list + 0.2*rand @$id_list) - 1;
-
-  my $pivot_id = $id_list->[$rand_index ]; 
-  my $pivot = $id_distance->{$pivot_id};
-
-  my @lefts = (); my @rights = (); my @equals = ();
-  if (0) { # use built-in grep, but run through array 2 (or sometimes 3) times; a bit slower.
-    @lefts  = grep { $id_distance->{$_} < $pivot } @$id_list;
-    @rights = grep { $id_distance->{$_} > $pivot } @$id_list;
-    # my @equals = grep { $_ == $pivot } @$list;
-    # my @equals = ();
-    if (@lefts + @rights + 1 == scalar @$id_list) {
-      push @equals, $pivot_id;
-    } else {
-      @equals = grep { $id_distance->{$_} == $pivot } @$id_list;
+  my $id_distance = shift;
+  #  my $k = shift;
+  if ($self->get_size() == 0) { # in this case, since keys are unique, don't need to check whether payload already in pq - just use 'unchecked_insert'
+    for (1..$self->{size_limit}) {
+      $self->unchecked_insert( each %$id_distance );
     }
-  } else { # a bit faster
-    for (@$id_list) { # store in separate arrays the ids with distance <, ==, and > the pivot 
-      if ($id_distance->{$_} < $pivot) {
-	push @lefts, $_;
-      } elsif ($id_distance->{$_} > $pivot) {
-	push @rights, $_;
-      } else {
-	push @equals, $_;
+    while (my($id, $d) = each  %$id_distance) {
+      if ($d < $self->{priority}->{$self->{queue}->[-1]}) {
+	$self->worst();
+	$self->unchecked_insert($id, $d);
       }
     }
- }
-
-  if ($k < @lefts) {  # kth will be in @lefts, but lefts has too many.
-    return $self->quickselect(\@lefts, $k, $id_distance);
-  } elsif ($k > @lefts + @equals) { # kth will be in @rights
-    return ((@lefts, @equals), $self->quickselect(\@rights, $k - @lefts - @equals, $id_distance));
-  } elsif ($k == @lefts) {	# done 
-    return @lefts;
-  } elsif ($k <= @lefts + @equals) { # just @lefts plus 1 or more from @equals
-    push @lefts, @equals[0..$k-@lefts-1];
-    return @lefts;
-  } else {
-    die "???\n";
+  } else { 
+    while (my($id, $d) = each  %$id_distance) {
+      $self->size_limited_insert($id, $d);
+    }
   }
-}
-
-sub size_limited_array_insert{
-   my $self = shift;
-   my $id_distance = shift;
-   my $k = shift;
-   my @ids = keys %$id_distance;
-   my $top_k_ids = $self->quick_select(\@ids, $k, $id_distance);
-   for my $topid (@$top_k_ids) {
-      $self->insert($topid, $id_distance->{$topid}); # 
-   }
 }
 
 sub size_limited_insert{
   my ($self, $payload, $priority) = @_;
-  my $worst_priority = $self->{prios}->{$self->{queue}->[-1]};
-  #  assert ($self->size() <= $self->{size_limit});
-  if (defined $self->{size_limit}) {
-    my $at_limit = scalar @{$self->{queue}} == $self->{size_limit};
-    if ($priority < $worst_priority) {
-      $self->insert($payload, $priority);
-      $self->worst() if($at_limit); # if exceeds size limit pop worst.
-    } elsif (!$at_limit) {
+  #    assert (scalar @{$self->{queue}} <= $self->{size_limit});
+  if (1) {
+    if (defined $self->{size_limit}) {
+      my $pq_size = scalar @{$self->{queue}};
+      if ($pq_size == 0) {
+	$self->insert($payload, $priority);
+      } else {
+	my $at_limit = ( $pq_size == $self->{size_limit} );
+	if ($priority < $self->{priority}->{$self->{queue}->[-1]}) {
+	  $self->insert($payload, $priority);
+	  $self->worst() if($at_limit); # if exceeds size limit pop worst.
+	} elsif (!$at_limit) {
+	  $self->insert($payload, $priority);
+	}
+      }
+    } else {		      # insert without regard to size of queue
       $self->insert($payload, $priority);
     }
-  } else {		      # insert without regard to size of queue
+  } else {			# clearly slower
     $self->insert($payload, $priority);
+    $self->worst() if(@{$self->{queue}} > $self->{size_limit});
   }
 }
 
@@ -139,7 +111,7 @@ sub unchecked_insert {
 
   # first of all, map the payload to the desired priority
   # run an update if the element already exists
-  $self->{prios}->{$payload} = $priority;
+  $self->{priority}->{$payload} = $priority;
 
   # And register the payload in the queue. There are a lot of special
   # cases that can be exploited to save us from doing the relatively
@@ -152,13 +124,13 @@ sub unchecked_insert {
   }
 
   # Special case: The new item belongs at the end of the queue.
-  if ($priority >= $self->{prios}->{$self->{queue}->[-1]}) {
+  if ($priority >= $self->{priority}->{$self->{queue}->[-1]}) {
     push(@{$self->{queue}}, $payload);
     return;
   }
 
   # Special case: The new item belongs at the head of the queue.
-  if ($priority < $self->{prios}->{$self->{queue}->[0]}) {
+  if ($priority < $self->{priority}->{$self->{queue}->[0]}) {
     unshift(@{$self->{queue}}, $payload);
     return;
   }
@@ -181,7 +153,7 @@ sub unchecked_insert {
 
     # We're looking for a priority lower than the one at the midpoint.
     # Set the new upper point to just before the midpoint.
-    if ($priority < $self->{prios}->{$self->{queue}->[$midpoint]}) {
+    if ($priority < $self->{priority}->{$self->{queue}->[$midpoint]}) {
       $upper = $midpoint - 1;
       next;
     }
@@ -196,7 +168,7 @@ sub unchecked_insert {
 
 sub _find_payload_pos {
   my ($self, $payload) = @_;
-  my $priority = $self->{prios}->{$payload};
+  my $priority = $self->{priority}->{$payload};
   if (!defined($priority)) {
     return undef;
   }
@@ -212,7 +184,7 @@ sub _find_payload_pos {
 
     # We're looking for a priority lower than the one at the midpoint.
     # Set the new upper point to just before the midpoint.
-    if ($priority < $self->{prios}->{$self->{queue}->[$midpoint]}) {
+    if ($priority < $self->{priority}->{$self->{queue}->[$midpoint]}) {
       $upper = $midpoint - 1;
       next;
     }
@@ -236,7 +208,7 @@ sub delete {
     return undef;
   }
 
-  delete($self->{prios}->{$payload});
+  delete($self->{priority}->{$payload});
   splice(@{$self->{queue}}, $pos, 1);
 
   return $pos;
@@ -244,7 +216,7 @@ sub delete {
 
 sub unchecked_update {
   my ($self, $payload, $new_prio) = @_;
-  my $old_prio = $self->{prios}->{$payload};
+  my $old_prio = $self->{priority}->{$payload};
 
   # delete the old item
   my $old_pos = $self->delete($payload);
@@ -264,7 +236,7 @@ sub unchecked_update {
 
 sub update {
   my ($self, $payload, $prio) = @_;
-  if (!defined($self->{prios}->{$payload})) {
+  if (!defined($self->{priority}->{$payload})) {
     goto &unchecked_insert;
   } else {
     goto &unchecked_update;
