@@ -81,7 +81,11 @@ use TomfyMisc qw ' fasta2seqon1line ';
 					     n_extras => $n_extras,
 					   }
                                           );
-   }
+    }
+
+my $a_node = (values %{$genotype_graph->nodes()})[0];
+   my $g_to_search_for = $a_node->genotype();
+   $genotype_graph->search_for_best_match($g_to_search_for);
 
    if ($output_graph) {
       my $graph_out_filename = $input_filename_stem . '.grph';
