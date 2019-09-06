@@ -30,8 +30,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
    my $multiplier = 10000; # controls # significant digits. 10000 -> 0.6492361... is output as 6492
    my $show_sequence = 0; # if true, will output the sequence at the end of line.
    my $n_extras = 0; # number of extra 'neighbors' to give each node, in addition to the $n_nearest_to_keep nearest nodes.
-   
-   srand(1234579);
+   my $seed = 1234579;
+
    GetOptions(
               'input_filename=s' => \$input_filename,
               'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
@@ -40,8 +40,14 @@ use TomfyMisc qw ' fasta2seqon1line ';
               'multiplier=i' => \$multiplier,
               'sequence_out!' => \$show_sequence,
 	      'extras=i' => \$n_extras,
+	      'seed=i' => \$seed,
              );
 
+   if ($seed > 0) {
+     srand($seed);
+   } else {
+     srand();
+   }
    my $input_filename_stem = $input_filename;
    $input_filename_stem =~ s/\.\S+$//; # remove the part after the (last) '.'
    my $input_string = '';
