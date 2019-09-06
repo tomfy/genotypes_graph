@@ -1,17 +1,17 @@
 package MyPriorityQueue;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use strict;
 use warnings;
 use constant BIG_NUMBER => 1_000_000_000;
+use constant DEFAULT_SIZE_LIMIT => 100;
 use Carp::Assert;
 
 sub new {
   my $classname = shift;
- # print $classname, "\n";
-  my $size_limit = shift // undef;
-my $id_distance = shift // undef;
+  my $size_limit = shift // DEFAULT_SIZE_LIMIT;
+  my $id_distance = shift // undef;
   my $self = bless {
 		queue => [], # payloads, in order from best [0] to worst [-1]
 		priority => {},	# keys: payloads, values: priorities
@@ -30,6 +30,11 @@ sub best {  # shift the 'best' (highest priority) element queue.
   return (shift(@{$self->{queue}}), $best_priority);
 }
 
+sub payloads{ # returns array ref with the payloads in order from best to worst
+  my $self = shift;
+  return $self->{queue};
+}
+
 sub worst {  # pop the 'worst' (lowest priority) element off the queue.
   my ($self) = @_;
   if (@{$self->{queue}} == 0) {
@@ -39,10 +44,35 @@ sub worst {  # pop the 'worst' (lowest priority) element off the queue.
   return (pop(@{$self->{queue}}), $worst_priority);
 }
 
-sub i_th_best{ # returns the specified payload by priority (0: best, 1: next best, etc.) Does not delete from queue.
+sub peek_best{
+  my $self = shift;
+  my ($best_payload, $best_priority) = (undef, undef);
+  if(@{$self->{queue}} > 0){
+    $best_payload = $self->{queue}->[0];
+    $best_priority = $self->{priority}->{$best_payload};
+  }
+  return ($best_payload, $best_priority);
+}
+
+sub peek_worst{
+  my $self = shift;
+  my ($worst_payload, $worst_priority) = (undef, undef);
+  if(@{$self->{queue}} > 0){
+    $worst_payload = $self->{queue}->[-1];
+    $worst_priority = $self->{priority}->{$worst_payload};
+  }
+  return ($worst_payload, $worst_priority);
+}
+
+sub i_th_best{ # returns the payload & priority of the specified rank: (0: best, 1: next best, etc.) Does not delete from queue.
   my $self = shift;
   my $i = shift;
-  return ($i >= 0  and  $i < @{$self->{queue}} )? $self->{queue}->[$i] : undef;
+  my ($payload, $priority) = (undef, undef);
+  if($i >= 0  and  $i < @{$self->{queue}} ){
+    $payload = $self->{queue}->[$i];
+    $priority = $self->{priority}->{$payload};
+  }
+  return ($payload, $priority);
 }
 
 sub set_size_limit{
@@ -82,28 +112,19 @@ sub size_limited_hash_insert{ # put a hash ref of payload, priority pairs into p
 }
 
 sub size_limited_insert{
+  # if payload is not inserted returns (0, undef);
+  # if payload is inserted returns (1, p) if payload p is bumped from queue, (1, undef) if no payload is bumped.
   my ($self, $payload, $priority) = @_;
-  #    assert (scalar @{$self->{queue}} <= $self->{size_limit});
-  if (1) {
-    if (defined $self->{size_limit}) {
-      my $pq_size = scalar @{$self->{queue}};
-      if ($pq_size == 0) {
-	$self->insert($payload, $priority);
-      } else {
-	my $at_limit = ( $pq_size == $self->{size_limit} );
-	if ($priority < $self->{priority}->{$self->{queue}->[-1]}) {
-	  $self->insert($payload, $priority);
-	  $self->worst() if($at_limit); # if exceeds size limit pop worst.
-	} elsif (!$at_limit) {
-	  $self->insert($payload, $priority);
-	}
-      }
-    } else {		      # insert without regard to size of queue
+  if( @{$self->{queue}} == $self->{size_limit} ){ # at limit
+    if($priority < $self->{priority}->{$self->{queue}->[-1]}) {
       $self->insert($payload, $priority);
+      return (1, $self->worst()); #  pop worst.
+    }else{ # at limit and not better than worst, so do not insert
+      return (0, undef);
     }
-  } else {			# clearly slower
+  }else{ # not at limit - plain insert
     $self->insert($payload, $priority);
-    $self->worst() if(@{$self->{queue}} > $self->{size_limit});
+    return (1, undef);
   }
 }
 
