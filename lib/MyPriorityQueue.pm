@@ -11,11 +11,14 @@ sub new {
   my $classname = shift;
  # print $classname, "\n";
   my $size_limit = shift // undef;
-  return bless {
+my $id_distance = shift // undef;
+  my $self = bless {
 		queue => [], # payloads, in order from best [0] to worst [-1]
 		priority => {},	# keys: payloads, values: priorities
 		size_limit => $size_limit,
 	       }, $classname;
+$self->size_limited_hash_insert($id_distance) if(defined $id_distance);
+return $self;
 }
 
 sub best {  # shift the 'best' (highest priority) element queue.

@@ -91,16 +91,15 @@ around BUILDARGS => sub {
       my $id2_dist = $idA__idB_distance{$id1};
       my $count = 0;
       my @neighbor_ids;
-      my $m = 'qsel';
+      my $m = 'pq';
       if ($m eq 'qsel') {		  # using quickselect algorithm (a bit faster)
 	@neighbor_ids = quickselect([keys %$id2_dist], $n_near, $id2_dist);
 	@neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
       } elsif($m eq 'sort') { # sort the whole set of nodes (a bit slower)
 	@neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
 	@neighbor_ids = @neighbor_ids[0 .. $n_near-1] if($n_near < scalar keys %$id2_dist);
-      }else{ # a bit faster than qsel
-	my $pq = MyPriorityQueue->new($n_near);
-	$pq->size_limited_hash_insert($id2_dist);
+      }else{ # a bit faster than qsel for small $n_near 
+	my $pq = MyPriorityQueue->new($n_near, $id2_dist);
 	@neighbor_ids = @{ $pq->{queue} };
       }
       my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
