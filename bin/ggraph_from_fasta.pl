@@ -31,6 +31,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
    my $show_sequence = 0; # if true, will output the sequence at the end of line.
    my $n_extras = 0; # number of extra 'neighbors' to give each node, in addition to the $n_nearest_to_keep nearest nodes.
    my $seed = 1234579;
+   my $search_pq_size = 20;
+   my $error_prob = 0;
 
    GetOptions(
               'input_filename=s' => \$input_filename,
@@ -41,6 +43,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
               'sequence_out!' => \$show_sequence,
 	      'extras=i' => \$n_extras,
 	      'seed=i' => \$seed,
+	      'pq_size=i' => \$search_pq_size,
+	      'error_prob=f' => \$error_prob,
              );
 
    if ($seed > 0) {
@@ -89,9 +93,10 @@ use TomfyMisc qw ' fasta2seqon1line ';
                                           );
     }
 
-my $a_node = (values %{$genotype_graph->nodes()})[0];
-   my $g_to_search_for = $a_node->genotype();
-   $genotype_graph->search_for_best_match($g_to_search_for);
+   my $genotype_to_clone = (values %{$genotype_graph->nodes()})[0] -> genotype();
+   my $g_to_search_for = $genotype_to_clone->clone(id => $genotype_to_clone->id() + 1000000);
+   $g_to_search_for->add_noise($error_prob);
+   $genotype_graph->search_for_best_match($g_to_search_for, $search_pq_size);
 
    if ($output_graph) {
       my $graph_out_filename = $input_filename_stem . '.grph';
@@ -107,77 +112,3 @@ my $a_node = (values %{$genotype_graph->nodes()})[0];
    }
 
 }                               # end main
-
-################ subroutines ############################
-
-# find all the distances and store in a hash.
-# keys are node ids, and values are hash refs of node id : distance pairs;
-# i.e. $idA__idB_distance{$idA}->{$idB} is the distance between nodes with ids $idA and $idB
-# sub store_distances{
-#    my $id_seq = shift;
-
-#    my @ids = keys %$id_seq;
-
-#    my %idA__idB_distance = ();  # hash of hash refs
-#    while (my ($i1, $id1) = each @ids) {
-#       #   print STDERR "$i1 $id1 \n";
-#       my $s1 = $id_seq->{$id1};
-#       for (my $i2 = $i1+1; $i2 < scalar @ids; $i2++) {
-#          my $id2 = $ids[$i2];
-#          #    print STDERR "    $i2 $id2 \n";
-#          my $s2 = $id_seq->{$id2};
-#          my ($d_ij, $both_snp_count) = distance($s1, $s2);
-#          #   print "$id1  $id2  $d_ij \n";
-#          my $d = ($both_snp_count > 0)? $d_ij/$both_snp_count : BIG_NUMBER; #
-#          if (!exists $idA__idB_distance{$id1}) {
-#             $idA__idB_distance{$id1} = {$id2 => $d_ij};
-#          } else {
-#             $idA__idB_distance{$id1}->{$id2} = $d_ij;
-#          }
-#          if (!exists $idA__idB_distance{$id2}) {
-#             $idA__idB_distance{$id2} = {$id1 => $d_ij};
-#          } else {
-#             $idA__idB_distance{$id2}->{$id1} = $d_ij;
-#          }
-#       }
-#    }
-#    return \%idA__idB_distance;
-# }
-
-# sub prune_to_n_closest{
-#    my $idA__idB_dist = shift;
-#    my $n_keep = shift;
-
-# }
-
-
-# sub distance{
-#    my $seq1 = shift;
-#    my $seq2 = shift;
-
-#    die "Sequence lengths are different - bye.\n" if(length $seq1 != length $seq2);
-
-#    my $distance = 0;
-#    my $count_both = 0; # count of snps with data present in both sequences
-#    my $count_missing = 0; # count of snps with data absent in one or both sequences
-#    for (my $i=0; $i < length $seq1; $i++) {
-#       my ($c1, $c2) = (substr($seq1, $i, 1), substr($seq2, $i, 1));
-#       if ($c1 eq '-'  or $c2 eq '-') {
-#          $count_missing++;
-#       } else {
-#          $count_both++;
-#          if ($c2 != $c1) {
-#             if ($c1 == 0) {
-#                $distance += $c2 - $c1;
-#             } elsif ($c1 == 1) {
-#                $distance += 1;
-#             } elsif ($c1 == 2) {
-#                $distance += $c1 - $c2;
-#             } else {
-#                die "c1 has unhandled value: $c1 \n";
-#             }
-#          }
-#       }
-#    }
-#    return ($distance, $count_both);
-# }
