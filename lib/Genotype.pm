@@ -62,6 +62,11 @@ around BUILDARGS => sub {
   # otherwise, don't modify arguments, should be array ref with id, sequence, and optionally generation and pedigree
 };
 
+sub clone{
+  my ($self, %params) = @_;
+  return $self->meta->clone_object($self, %params);
+}
+
 
 sub distance{ # calculate distance between this genotype obj. and another
   my $self = shift;
@@ -122,6 +127,44 @@ sub mean{
   }
   return \@mean_gt;
 }
+
+sub add_noise{
+  my $self = shift;
+  my $error_prob = shift;
+  my $sequence = $self->sequence();
+#  print "$sequence \n";
+  for my $i (0 .. (length $sequence)-1) {
+ #   print "$i  ", rand(1), "\n";
+    if (rand(1) < $error_prob) { # error
+  #    print "   ***\n";
+      my $c = substr($sequence, $i, 1);
+      if ($c == 0) {
+	if (rand(1) < 0.5) {
+	  $c = 1;
+	} else {
+	  $c = 2;
+	}
+      } elsif ($c == 1) {
+	if (rand(1) < 0.5) {
+	  $c = 0;
+	} else {
+	  $c = 2;
+	}
+      } elsif ($c == 2) {
+	if (rand(1) < 0.5) {
+	  $c = 0;
+	} else {
+	  $c = 1;
+	}
+      }
+      substr($sequence, $i, 1, $c);
+    } # end if error branch
+  }
+  $self->{sequence} = $sequence;
+}
+  
+
+
 ############################################
 
 __PACKAGE__->meta->make_immutable;

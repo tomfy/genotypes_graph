@@ -194,7 +194,6 @@ sub search_for_best_match{
 
   my $pq = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
   my $id_status = {$init_node_id => 0}; # 0: unchecked, 1: checked, 2: checked and neighbors checked
-  my $dead_ids = {};	       # neighbors of these have been checked.
 
   my $count_d_calcs = 0;
   my $count_rounds = 0;
@@ -204,6 +203,7 @@ sub search_for_best_match{
   while (1) {
     my $neighbor_ids = {};
     my $inserted_ids = {};
+    
     for my $an_id (keys %$active_ids) {
       # check these ids. i.e. get distances, insert in pq, and keep track of which have been checked,
       # and which are in the pq after they have all been added (and some possibly bumped).
@@ -215,9 +215,11 @@ sub search_for_best_match{
       $inserted_ids->{$an_id} = 1 if($inserted);
       delete $inserted_ids->{$bumped_id} if(defined $bumped_id); # so if an id is inserted, then bumped, it will not be in this hash.
     }
+    
     $count_rounds++;
     $count_futile_rounds = (keys %$inserted_ids > 0)? 0 : $count_futile_rounds+1;
-    last if($count_futile_rounds > 1 and $count_rounds > 1); 
+    last if($count_futile_rounds > 1 and $count_rounds > 1);
+    
     for my $an_id (keys %$inserted_ids) { # get the neighbors of these (only those which have not been checked yet)
       for my $a_neighbor_id (@{$self->nodes()->{$an_id}->neighbor_ids()}) {
 	$id_status->{$a_neighbor_id} //= 0;
@@ -225,18 +227,24 @@ sub search_for_best_match{
       }
     }
     for my $an_id (keys %$active_ids) { # these have been check and the set of their neighbors will need to be checked has been defined.
-      $dead_ids->{$an_id} = 1;
       $id_status->{$an_id} = 2;
     }
-    $active_ids = $neighbor_ids; # neighbors of this round become active nodes for next round.
-    print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs \n";
-    for(my $i=0; 1==1; $i++){
+    $active_ids = $neighbor_ids; # neighbors in this round become active nodes for next round.
+    
+    print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
+    for(my $i=0; $i <= 2; $i++){
       my ($an_id, $dist) = $pq->i_th_best($i);
       last if(!defined $an_id);
       print "$an_id  $dist    ";
     }print "\n";
+    
   } # end of a round
-  
+    print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
+    for(my $i=0; $i <= 2; $i++){
+      my ($an_id, $dist) = $pq->i_th_best($i);
+      last if(!defined $an_id);
+      print "$an_id  $dist    ";
+    }print "\n";
 }
 
 sub as_string{
