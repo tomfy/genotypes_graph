@@ -75,9 +75,9 @@ sub distance{ # calculate distance between this genotype obj. and another
   my $this_gt = $self->sequence();	      # string
   my $other_gt = $other_genotype->sequence(); # string
 
-  if (1) { # use inline::C function: (much faster)
+  if (1) {		       # use inline::C function: (much faster)
     return gg_distance($this_gt, $other_gt);
-  } else { # pure perl. much slower.
+  } else {			# pure perl. much slower.
     my $distance = 0;
     my $count_both = 0; # count of snps with data present in both sequences
     my $count_missing = 0; # count of snps with data absent in one or both sequences
@@ -133,33 +133,61 @@ sub add_noise{
   my $self = shift;
   my $error_prob = shift;
   my $sequence = $self->sequence();
-#  print "$sequence \n";
-  for my $i (0 .. (length $sequence)-1) {
- #   print "$i  ", rand(1), "\n";
-    if (rand(1) < $error_prob) { # error
-  #    print "   ***\n";
+  if (1) {
+    #  print "$sequence \n";
+    for my $i (0 .. (length $sequence)-1) {
+      #   print "$i  ", rand(1), "\n";
+      if (rand(1) < $error_prob) { # error
+	#    print "   ***\n";
+	my $c = substr($sequence, $i, 1);
+	if ($c == 0) {
+	  if (rand(1) < 0.5) {
+	    $c = 1;
+	  } else {
+	    $c = 2;
+	  }
+	} elsif ($c == 1) {
+	  if (rand(1) < 0.5) {
+	    $c = 0;
+	  } else {
+	    $c = 2;
+	  }
+	} elsif ($c == 2) {
+	  if (rand(1) < 0.5) {
+	    $c = 0;
+	  } else {
+	    $c = 1;
+	  }
+	}
+	substr($sequence, $i, 1, $c);
+      }				# end if error branch
+    }
+  } else {			# error model 2
+    my $trans_prob1 = $error_prob*(1.0 - $error_prob);
+    my $trans_prob2 = $error_prob*$error_prob;
+    for my $i (0 .. (length $sequence)-1) {
       my $c = substr($sequence, $i, 1);
-      if ($c == 0) {
-	if (rand(1) < 0.5) {
-	  $c = 1;
-	} else {
+      my $rand_number = rand();
+      if ($c == 1) {
+	if ($rand_number < $trans_prob1) {
+	  $c = 0;
+	} elsif ($rand_number < 2*$trans_prob1) {
 	  $c = 2;
 	}
-      } elsif ($c == 1) {
-	if (rand(1) < 0.5) {
-	  $c = 0;
-	} else {
+      } elsif ($c == 0) {
+	if ($rand_number < 2*$trans_prob1) {
+	  $c = 1;
+	} elsif ($rand_number < 2*$trans_prob1 + $trans_prob2) {
 	  $c = 2;
 	}
       } elsif ($c == 2) {
-	if (rand(1) < 0.5) {
-	  $c = 0;
-	} else {
+	if ($rand_number < 2*$trans_prob1) {
 	  $c = 1;
+	} elsif ($rand_number < 2*$trans_prob1 + $trans_prob2) {
+	  $c = 0;
 	}
       }
-      substr($sequence, $i, 1, $c);
-    } # end if error branch
+    }
   }
   $self->{sequence} = $sequence;
 }
@@ -231,7 +259,7 @@ i++;
 }
 // printf("%d  %d \n", dist, count);
 if (count > 0) {
-//  printf("%g\n", 1.0*dist/count);
+  //  printf("%g\n", 1.0*dist/count);
   return 1.0*dist/count;
 } else
   return 1000;
