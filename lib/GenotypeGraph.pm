@@ -21,15 +21,15 @@ has nodes => (
              );
 
 has n_near => (
-                isa => 'Int', # the number of outward edges to keep in the graph for each node.
-                is => 'ro',
-                default => BIG_NUMBER, # -> keep all edges.
-               );
+	       isa => 'Int', # the number of outward edges to keep in the graph for each node.
+	       is => 'ro',
+	       default => BIG_NUMBER, # -> keep all edges.
+	      );
 has n_extras =>  (
-                isa => 'Int', # the number randomly chosen nodes to add as neighbors in addition to near ones.
-                is => 'ro',
-                default => 0, # just keep the closest ones.
-               );
+		  isa => 'Int', # the number randomly chosen nodes to add as neighbors in addition to near ones.
+		  is => 'ro',
+		  default => 0, # just keep the closest ones.
+		 );
 
 has distances => ( # initially all N choose 2 distances (edge weights)
                   isa => 'HashRef',
@@ -93,13 +93,13 @@ around BUILDARGS => sub {
       my $count = 0;
       my @neighbor_ids;
       my $m = 'pq';
-      if ($m eq 'qsel') {		  # using quickselect algorithm (a bit faster)
+      if ($m eq 'qsel') { # using quickselect algorithm (a bit faster)
 	@neighbor_ids = quickselect([keys %$id2_dist], $n_near, $id2_dist);
 	@neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
-      } elsif($m eq 'sort') { # sort the whole set of nodes (a bit slower)
+      } elsif ($m eq 'sort') { # sort the whole set of nodes (a bit slower)
 	@neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
 	@neighbor_ids = @neighbor_ids[0 .. $n_near-1] if($n_near < scalar keys %$id2_dist);
-      }else{ # a bit faster than qsel for small $n_near 
+      } else {		   # a bit faster than qsel for small $n_near 
 	my $pq = MyPriorityQueue->new($n_near, $id2_dist);
 	@neighbor_ids = @{ $pq->{queue} };
       }
@@ -107,13 +107,14 @@ around BUILDARGS => sub {
       get_extra_ids($id2_dist, \@neighbor_ids, \%neighborid_dist, $n_extras);
 
       $id_node->{$id1} = GenotypeGraphNode->new( {
-					    id => $id1,
-					    genotype => $id_gobj{$id1}, # genotype object
-					    neighbor_ids => \@neighbor_ids,
-					    neighbor_id_distance => \%neighborid_dist,
-					   } );
+						  id => $id1,
+						  genotype => $id_gobj{$id1}, # genotype object
+						  #		    neighbor_ids => \@neighbor_ids,
+						  neighbor_id_distance => \%neighborid_dist,
+						 } );
 
-    } # end node construction loop
+    }				# end node construction loop
+
     return {
 	    nodes => $id_node,
 	    n_near => $n_near,
@@ -154,7 +155,7 @@ around BUILDARGS => sub {
       my $a_node = GenotypeGraphNode->new( {
 					    id => $id1,
 					    genotype => $gobj, # genotype object
-					    neighbor_ids => \@neighbor_ids,
+					    #		    neighbor_ids => \@neighbor_ids,
 					    neighbor_id_distance => $neighborid_dist,
 					    #           furthest_id_distance => [$furthest_id, $furthest_d],
 					   } );
@@ -173,11 +174,17 @@ around BUILDARGS => sub {
 
 sub BUILD {
   my $self = shift;
-  my @nodes = values %{$self->nodes()};
-  while (my($id, $node_obj) = each %{$self->nodes()} ) {
-    #  $node_obj->graph($self); # can't do this because graph is read-only, but
+  #my @nodes = values %{$self->nodes()};
+  for my $node_obj (values %{$self->nodes()} ) {
     $node_obj->{graph} = $self; # can do it this way.
+    $node_obj->symmetrize_neighbors();
   }
+
+  # if (1) {
+  #   for my $node_obj (values %{$self->nodes()}) {
+  #     $node_obj->symmetrize_neighbors();
+  #   }
+  # }
 }
 
 sub get_node_by_id{
@@ -188,64 +195,74 @@ sub get_node_by_id{
 
 sub search_for_best_match{
   my $self = shift;
-  my $gobj = shift;		# Genotype object to match
+  my $gobj = shift;		#  Genotype objects to match
   my $pq_size_limit = shift // 10;
+  my $independent_starts = shift // 2;
+  print $gobj->id(), "     ";
+  my %initid_bestmatchiddist = ();
+  for (1..$independent_starts) {
+    my $init_node_id = (keys %{$self->nodes()})[ int(rand(keys  %{$self->nodes()})) ];
 
-  my $init_node_id = (keys %{$self->nodes()})[ int(rand(keys  %{$self->nodes()})) ];
+    my $pq = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
+    my $id_status = {$init_node_id => 0}; # 0: unchecked, 1: checked, 2: checked and neighbors checked
 
-  my $pq = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
-  my $id_status = {$init_node_id => 0}; # 0: unchecked, 1: checked, 2: checked and neighbors checked
+  
+    my $count_d_calcs = 0;
+    my $count_rounds = 0;
+    my $count_futile_rounds = 0; # count the number of rounds since a better candidate has been found - use for deciding when to stop.
+    my $active_ids = {$init_node_id => 1}; # neighbors of these need to be checked.
+    while (1) {
+      my $neighbor_ids = {};
+      my $inserted_ids = {};
 
-  my $count_d_calcs = 0;
-  my $count_rounds = 0;
-  my $count_futile_rounds = 0; # count the number of rounds since a better candidate has been found - use for deciding when to stop.
-  my $active_ids = {$init_node_id => 1}; # neighbors of these need to be checked.
-  print "# id to search for: ", $gobj->id(), "   init node id:   $init_node_id \n";
-  while (1) {
-    my $neighbor_ids = {};
-    my $inserted_ids = {};
-    
-    for my $an_id (keys %$active_ids) {
-      # check these ids. i.e. get distances, insert in pq, and keep track of which have been checked,
-      # and which are in the pq after they have all been added (and some possibly bumped).
+      for my $an_id (keys %$active_ids) {
+	# check these ids. i.e. get distances, insert in pq, and keep track of which have been checked,
+	# and which are in the pq after they have all been added (and some possibly bumped).
 
-      my $d = $gobj->distance($self->nodes()->{$an_id}->genotype());
-      $count_d_calcs++;
-      my ($inserted, $bumped_id) = $pq->size_limited_insert($an_id, $d);
-      $id_status->{$an_id} = 1;	# this one has been checked!
-      $inserted_ids->{$an_id} = 1 if($inserted);
-      delete $inserted_ids->{$bumped_id} if(defined $bumped_id); # so if an id is inserted, then bumped, it will not be in this hash.
-    }
-    
-    $count_rounds++;
-    $count_futile_rounds = (keys %$inserted_ids > 0)? 0 : $count_futile_rounds+1;
-    last if($count_futile_rounds > 1 and $count_rounds > 1);
-
-    for my $an_id (keys %$inserted_ids) { # get the neighbors of these (only those which have not been checked yet)
-      for my $a_neighbor_id (@{$self->nodes()->{$an_id}->neighbor_ids()}) {
-	$id_status->{$a_neighbor_id} //= 0;
-	$neighbor_ids->{$a_neighbor_id} = 1 if($id_status->{$a_neighbor_id} == 0); # skip any neighbors which have been checked already.
+	my $d = $gobj->distance($self->nodes()->{$an_id}->genotype());
+	$count_d_calcs++;
+	my ($inserted, $bumped_id) = $pq->size_limited_insert($an_id, $d);
+	$id_status->{$an_id} = 1; # this one has been checked!
+	$inserted_ids->{$an_id} = 1 if($inserted);
+	delete $inserted_ids->{$bumped_id} if(defined $bumped_id); # so if an id is inserted, then bumped, it will not be in this hash.
       }
-    }
-    for my $an_id (keys %$active_ids) { # these have been check and the set of their neighbors will need to be checked has been defined.
-      $id_status->{$an_id} = 2;
-    }
-    $active_ids = $neighbor_ids; # neighbors in this round become active nodes for next round.
 
+      $count_rounds++;
+      $count_futile_rounds = (keys %$inserted_ids > 0)? 0 : $count_futile_rounds+1;
+      last if($count_futile_rounds > 1 and $count_rounds > 1);
+
+      for my $an_id (keys %$inserted_ids) { # get the neighbors of these (only those which have not been checked yet)
+	#  for my $a_neighbor_id (@{$self->nodes()->{$an_id}->neighbor_ids()}) {
+	for my $a_neighbor_id (keys %{$self->nodes()->{$an_id}->neighbor_id_distance()}) {
+	  $id_status->{$a_neighbor_id} //= 0;
+	  $neighbor_ids->{$a_neighbor_id} = 1 if($id_status->{$a_neighbor_id} == 0); # skip any neighbors which have been checked already.
+	}
+      }
+      for my $an_id (keys %$active_ids) { # these have been check and the set of their neighbors will need to be checked has been defined.
+	$id_status->{$an_id} = 2;
+      }
+      $active_ids = $neighbor_ids; # neighbors in this round become active nodes for next round.
+
+      # print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
+      # for(my $i=0; $i <= 2; $i++){
+      #   my ($an_id, $dist) = $pq->i_th_best($i);
+      #   last if(!defined $an_id);
+      #   print "$an_id  $dist    ";
+      # }print "\n";
+
+    }				# end of a round
     # print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
     # for(my $i=0; $i <= 2; $i++){
     #   my ($an_id, $dist) = $pq->i_th_best($i);
     #   last if(!defined $an_id);
     #   print "$an_id  $dist    ";
     # }print "\n";
-
-  } # end of a round
-    print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
-    for(my $i=0; $i <= 2; $i++){
-      my ($an_id, $dist) = $pq->i_th_best($i);
-      last if(!defined $an_id);
-      print "$an_id  $dist    ";
-    }print "\n";
+    my ($best_id, $best_dist) = $pq->best();
+    print "$init_node_id  $best_id  $best_dist     ";
+    $initid_bestmatchiddist{$gobj->id()} = $best_id . "_" . sprintf("%f6.4", $best_dist);
+  }
+  print "\n";
+  return \%initid_bestmatchiddist
 }
 
 sub as_string{
@@ -287,7 +304,7 @@ sub get_extra_ids{
   for (1..$n_extras) {
     for (1..$n_try) {
       my $extra_id = (keys %$id2_dist)[int(rand keys %$id2_dist)];
-#	(keys %$id2_dist)[0 - $_];
+      #	(keys %$id2_dist)[0 - $_];
       if (! exists $nearid_dist->{$extra_id}) {
 	push @$near_ids, $extra_id;
 	$nearid_dist->{$extra_id} = $id2_dist->{$extra_id};
