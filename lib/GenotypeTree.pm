@@ -1,5 +1,6 @@
 package GenotypeTree;
-use Moose;
+#use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
@@ -36,7 +37,8 @@ sub add_genotype{
    my $genotype = $gobj->sequence(); # ArrayRef, e.g. [0, 0, 1, 2, 1, 2, 2, 0, 0, 0, 1, 0, '-', 1, 0];
    my $id = $gobj->id();
    my $root = $self->root();
-   $root->inc_counter();
+   # $root->inc_counter();
+$root->{count}++;
    my @ids_array = push @{$root->ids()}, $id;
    $root->ids( \@ids_array );
    my $current_node = $self->root();

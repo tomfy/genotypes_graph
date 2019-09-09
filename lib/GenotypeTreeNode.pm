@@ -1,5 +1,6 @@
 package GenotypeTreeNode;
-use Moose;
+#use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
@@ -19,13 +20,13 @@ has ids => (
 
 
 has count => (
-              traits => ['Counter'],
+        #      traits => ['Counter'],
               isa => 'Int',
               is => 'rw',
               default => 0,
-              handles => {
-                          inc_counter => 'inc',
-                         },
+              # handles => {
+              #             inc_counter => 'inc',
+              #            },
              );
 
 has depth => ( # 0 for root, counts not number of nodes below root, but number of snps, so all leaves have depth == length of genotype sequences.
@@ -74,7 +75,8 @@ sub add_child{                  #
     $child_node = $self->children()->{$g};
     push @{$child_node->ids()}, $id;
   }
-  $child_node->inc_counter();
+#  $child_node->inc_counter();
+$child_node->{count}++;
   return $child_node;
 }
 

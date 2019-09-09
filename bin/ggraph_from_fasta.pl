@@ -93,10 +93,12 @@ use TomfyMisc qw ' fasta2seqon1line ';
                                           );
     }
 
-   my $genotype_to_clone = (values %{$genotype_graph->nodes()})[0] -> genotype();
-   my $g_to_search_for = $genotype_to_clone->clone(id => $genotype_to_clone->id() + 1000000);
+   #  for(my $i = 0; $i < 100; $i++){
+   for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
+   my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);
    $g_to_search_for->add_noise($error_prob);
    $genotype_graph->search_for_best_match($g_to_search_for, $search_pq_size);
+}
 
    if ($output_graph) {
       my $graph_out_filename = $input_filename_stem . '.grph';
