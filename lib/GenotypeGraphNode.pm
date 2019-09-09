@@ -1,5 +1,6 @@
 package GenotypeGraphNode;
-use Moose;
+#use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );

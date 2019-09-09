@@ -1,5 +1,6 @@
 package GenotypeGraph;
-use Moose;
+# use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
@@ -199,7 +200,7 @@ sub search_for_best_match{
   my $count_rounds = 0;
   my $count_futile_rounds = 0; # count the number of rounds since a better candidate has been found - use for deciding when to stop.
   my $active_ids = {$init_node_id => 1}; # neighbors of these need to be checked.
-  print "id to search for: ", $gobj->id(), "   init node id:   $init_node_id \n";
+  print "# id to search for: ", $gobj->id(), "   init node id:   $init_node_id \n";
   while (1) {
     my $neighbor_ids = {};
     my $inserted_ids = {};
@@ -219,7 +220,7 @@ sub search_for_best_match{
     $count_rounds++;
     $count_futile_rounds = (keys %$inserted_ids > 0)? 0 : $count_futile_rounds+1;
     last if($count_futile_rounds > 1 and $count_rounds > 1);
-    
+
     for my $an_id (keys %$inserted_ids) { # get the neighbors of these (only those which have not been checked yet)
       for my $a_neighbor_id (@{$self->nodes()->{$an_id}->neighbor_ids()}) {
 	$id_status->{$a_neighbor_id} //= 0;
@@ -230,14 +231,14 @@ sub search_for_best_match{
       $id_status->{$an_id} = 2;
     }
     $active_ids = $neighbor_ids; # neighbors in this round become active nodes for next round.
-    
-    print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
-    for(my $i=0; $i <= 2; $i++){
-      my ($an_id, $dist) = $pq->i_th_best($i);
-      last if(!defined $an_id);
-      print "$an_id  $dist    ";
-    }print "\n";
-    
+
+    # print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
+    # for(my $i=0; $i <= 2; $i++){
+    #   my ($an_id, $dist) = $pq->i_th_best($i);
+    #   last if(!defined $an_id);
+    #   print "$an_id  $dist    ";
+    # }print "\n";
+
   } # end of a round
     print "rounds:  $count_rounds  $count_futile_rounds distance calcs: $count_d_calcs    ";
     for(my $i=0; $i <= 2; $i++){
