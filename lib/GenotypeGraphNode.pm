@@ -23,11 +23,11 @@ has id => (
            required => 1,
           );
 
-has neighbor_ids => (
-		     isa => 'ArrayRef',
-		     is => 'ro',
-		     required => 1,
-		    );
+# has neighbor_ids => (  # just use keys of neighbor_id_distance
+# 		     isa => 'ArrayRef',
+# 		     is => 'ro',
+# 		     required => 0,
+# 		    );
 
 has neighbor_id_distance => (		# should be just the neighbors. 
                     isa => 'HashRef',
@@ -59,14 +59,28 @@ sub as_string{
   my $show_sequence = shift // 0;
   my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
   my @nn_ids =
-    #    sort { $a <=> $b }  # uncomment to sort
-    @{$self->neighbor_ids()};	# sort by id
+    #    sort { $a <=> $b }  # uncomment to sort by id
+    keys %{$self->neighbor_id_distance()};
+    #    @{$self->neighbor_ids()};	# sort by id
+  
   for my $idB (@nn_ids) {
     my $dist = $self->neighbor_id_distance->{$idB};
     $str .= sprintf("%4d %5.4f  ", $idB, $dist);
   }
   $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
   return $str;
+}
+
+sub symmetrize_neighbors{
+  my $self = shift;
+  # make neighbors of self have self as neighbors
+  my ($graph, $self_id) = ($self->graph(), $self->id());
+  while(my($nid, $d) = each %{$self->neighbor_id_distance()}){ # distance from $self to $nid is $d
+    my $neighbors_of_neighbor = $graph->nodes()->{$nid}->neighbor_id_distance(); # hashref with neighbor ids and dists of $nid
+    if(!exists $neighbors_of_neighbor->{$self_id}){ # if $self is not already a neighbor of $nid
+      $neighbors_of_neighbor->{$self_id} = $d;
+    }
+  }
 }
 
 
