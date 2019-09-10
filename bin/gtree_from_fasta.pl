@@ -36,6 +36,7 @@ use Genotype;
   my $p_missing = -1;		# prob. of missing data at each snp.
   my $algorithm = 'both';	# 'quick' or 'slow' or 'both'
   my $fasta2 = undef;
+  my $max_mismatches = 0;
 
   GetOptions(
 	     'input_filename|fasta1=s' => \$input_filename,
@@ -47,6 +48,7 @@ use Genotype;
 	     'seed=i' => \$rng_seed,
 	     'p_missing=f' => \$p_missing,
 	     'algorithm=s' => \$algorithm,
+	     'max_mismatch=i' => \$max_mismatches,
 	    );
 
   print STDERR "input file name: $input_filename\n";
@@ -80,9 +82,9 @@ use Genotype;
   if ($algorithm ne 'quick') {
     my $N = scalar @$gobjects;
     while (my($i, $g1) = each @$gobjects) {
-      for my $j (0 .. $N-1) {
+      for my $j (0 .. (@$gobjects2-1)) {
 	my $g2 = $gobjects2->[$j];
-	if (compare_two_genotype_objects($g1, $g2) eq 'equal') {
+	if (count_mismatches($g1, $g2) <= $max_mismatches) {
 	  # $exhaustive_eqpairs{$g1->id()} .= $g2->id() . ',';
 	  $exhaustive_eqpairs{$g2->id()} .= $g1->id() . ','; # if($j != $i);
 	} else {					     # nuthin
@@ -100,7 +102,6 @@ use Genotype;
       @eeks = sort { $a <=> $b } @eeks;
       $ex_str .=  "$anid  " . join(",", @eeks) . "\n" if(scalar @eeks > 0);
     }
-    print "ex string: [$ex_str]\n";
   }
   $t2 = gettimeofday();
   #### end of exhaustive ####
@@ -119,12 +120,13 @@ use Genotype;
 	#	print $gtree->as_newick(), "\n\n" if($newick_out);
       }
     }
-
+    
+  # search in tree for sequences from $fasta2 file
     for my $gobj2 (@$gobjects2) {
-      $quick_str .= $gobj2->id() . "  " . $gtree->search($gobj2) . "\n";
+      $quick_str .= $gobj2->id() . "  " . $gtree->search($gobj2, $max_mismatches) . "\n";
     }
-    print "exhaust str: [$ex_str]\n";
-    print "quick str:   [$quick_str]\n";
+    print "exhaust str: [\n$ex_str]\n";
+    print "quick str:   [\n$quick_str]\n";
     $t3 = gettimeofday();
     print "time to construct and search genotype tree: ", $t3-$t2, " sec.\n";
 
@@ -133,14 +135,9 @@ use Genotype;
     $t3 = gettimeofday();
 
     #   print STDERR "time to do search tree for N genotypes: ", $t4-$t3, " sec.\n";
-    
- 
 
-    # search in tree for sequences from $fasta2 file
-    for my $gobj2 (@$gobjects2) {
-      print "Search result for:  [", $gobj2->id(), "]  [", $gtree->search($gobj2), "]\n";
-    }
   }
+  
   # check quick gives same edge set as exhaustive
   my %exedges = ();
   my %qedges = ();
@@ -203,20 +200,21 @@ sub lose_data{ # with prob. $p_missing replace snp genotypes with MISSING_DATA
   return $sequence;
 }
 
-sub compare_two_genotype_objects{
+sub count_mismatches{
   my $gobj1 = shift;
   my $gobj2 = shift;
   my $gs1 = $gobj1->sequence();
   my $gs2 = $gobj2->sequence();
   my $L1 = length $gs1;
   die if(length $gs2 != $L1);
-  my $n_equal_characters = 0;
+  my $n_mismatches = 0;
   for my $i (0..$L1-1) {
     my ($c1, $c2) = ( substr($gs1, $i, 1), substr($gs2, $i, 1) );
-    last if(($c1 ne MISSING_DATA)  and  ($c2 ne MISSING_DATA)  and  ($c1 ne $c2));
-    $n_equal_characters++;
+    if(($c1 ne MISSING_DATA)  and  ($c2 ne MISSING_DATA)  and  ($c1 ne $c2)){
+      $n_mismatches++;
+    }
   }
-  return ($n_equal_characters == $L1)? 'equal' : 'unequal';
+  return $n_mismatches;
 }
 
 sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an array ref of genotype objects.
@@ -245,7 +243,7 @@ sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an a
     if ($line =~ /^>(\S+)\s+(\S+)\s+(\S+)/) {
       my ($id, $generation, $pedigree) = ($1, $2, $3);
       my $sequence = shift @fasta_lines;
-      print "the sequence $sequence \n";
+   #   print "the sequence $sequence \n";
       $sequence =~ s/\s+//g;
       $sequence_length = length $sequence if(!defined $sequence_length);
       die "Sequence lengths must all be the same.\n" if(length $sequence != $sequence_length);

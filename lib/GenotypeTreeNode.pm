@@ -8,7 +8,7 @@ use constant MISSING_DATA => 'X';
 
 no warnings 'recursion';
 
-use constant DEBUG => 1;
+use constant DEBUG => 0;
 
 
 # a class for nodes of a tree.
@@ -153,6 +153,7 @@ sub search_recursive{
   my $self = shift;
   my $id2 = shift;
   my $gt2s = shift;		# searching for this one.
+  my $max_bad_count = shift // die; # the max number of mismatching characters allowed along this branch
   my $gt1s = $self->genotype(); # the genotype along the branch above this node.
   my ($L1, $L2) = (length $gt1s, length $gt2s);
 
@@ -162,32 +163,44 @@ sub search_recursive{
     assert ($L2 == $L1) if DEBUG;
   }
   my $matching_id_string = '';
-  my $n_equal_characters = 0;
-  for my $i (0 .. $L1 - 1) { 
+  my $n_ok_characters = 0; # the number of characters before the bad_count gets too big.
+  my $bad_count = 0; # the number of mismatching characters so far along this branch.
+  for my $i (0 .. $L1 - 1) {
     my ($g1, $g2) = (substr($gt1s, $i, 1), substr($gt2s, $i, 1));
-    last if($g1 ne MISSING_DATA  and  $g2 ne MISSING_DATA  and  $g2 ne $g1 );
-    $n_equal_characters++;
+    if ($max_bad_count == 0) {
+      last if($g1 ne MISSING_DATA  and  $g2 ne MISSING_DATA  and  $g2 ne $g1 );
+      $n_ok_characters++;
+    } else {			#
+      $bad_count++ if ($g1 ne MISSING_DATA  and  $g2 ne MISSING_DATA  and  $g2 ne $g1 );
+      if ($bad_count > $max_bad_count) {
+	last;
+      } else {
+	$n_ok_characters++;
+      }
+    }
   }
+#  print "AA: $gt1s  $gt2s  $bad_count  $n_ok_characters   $max_bad_count \n";
 
-  if ($n_equal_characters < $L1) { # this branch is ruled out.
+  if ($n_ok_characters < $L1) { # this branch is ruled out.
   } else {
-    assert ($n_equal_characters == $L1) if DEBUG;
+    assert ($n_ok_characters == $L1) if DEBUG; # ok so far, now examine children if any.
+    
     if ($L2 == $L1) {	 # moment of truth - this must be a leaf node.
       # these are identical genotypes!
       $matching_id_string .= join(',', @{$self->ids()}) . ',';
     } elsif ($L2 > $L1) {	# Ok so far, but must look further ...
-      substr($gt2s, 0, $n_equal_characters, '');
+      substr($gt2s, 0, $n_ok_characters, '');
       my $g2head = substr($gt2s, 0, 1);
-      if ($g2head eq MISSING_DATA) { # must check all subtrees
+      if ($g2head eq MISSING_DATA  or  $bad_count < $max_bad_count) { # must check all subtrees
 	while ( my ($gh, $child) = each %{ $self->children() }) {
-	  $matching_id_string .= $child->search_recursive($id2, $gt2s);
+	  $matching_id_string .= $child->search_recursive($id2, $gt2s, $max_bad_count - $bad_count);
 	}
-      } else {
+      } else { # $g2head is 0,1, or 2; and $bad_count == $max_bad_count
 	for my $gh ($g2head, MISSING_DATA) {
 	  my $child = $self->children()->{$gh} // undef;
 	  if (defined $child) {
 	    if ($gh eq $g2head  or  $gh eq MISSING_DATA) {
-	      $matching_id_string .= $child->search_recursive($id2, $gt2s);
+	      $matching_id_string .= $child->search_recursive($id2, $gt2s, $max_bad_count - $bad_count);
 	    }
 	  }
 	}
@@ -210,7 +223,7 @@ sub check_node{
     }
     my $ids_str = join(',', sort {$a <=> $b} @{$self->ids()});
     my $check_ids_str = join(',', sort {$a <=> $b} @check_ids);
-    print "ids strs in check_node: [$ids_str]  [$check_ids_str] \n";
+#    print "ids strs in check_node: [$ids_str]  [$check_ids_str] \n";
     $error += 100 if ($check_ids_str ne $ids_str);
   }
   return $error;

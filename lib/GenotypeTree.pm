@@ -75,18 +75,19 @@ sub add_genotype_compact{
 sub search{
   my $self = shift;
   my $gobj = shift;
+  my $max_bad_count = shift // die;
   my $root = $self->root();
   my $genotype_string = $gobj->sequence();
   my $ghead = substr($genotype_string, 0, 1);
   my $matching_ids = '';
-  if ($ghead eq MISSING_DATA) {
+  if ($ghead eq MISSING_DATA  or  ($max_bad_count > 0)) {
     while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
-      $matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence());
+      $matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence(), $max_bad_count);
     }
   } else {
     while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
       if ($gh eq $ghead  or  $gh eq MISSING_DATA) {
-	$matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence());
+	$matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence(), $max_bad_count);
       }
     }
   }
