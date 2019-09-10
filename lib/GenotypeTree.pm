@@ -18,11 +18,11 @@ has depth => (                  # equal to length of sequences
               required => 1,
              );
 
-has size => ( # number of genotypes which have been added.
+has size => (		  # number of genotypes which have been added.
 	     isa => 'Int',
 	     is => 'rw',
 	     default => 0,
-	     );
+	    );
 
 # class to represent a tree of genotypes
 
@@ -32,21 +32,21 @@ sub BUILD{
 }
 
 sub add_genotype{
-   my $self = shift;
-   my $gobj = shift ;
-   my $genotype = $gobj->sequence(); # ArrayRef, e.g. [0, 0, 1, 2, 1, 2, 2, 0, 0, 0, 1, 0, '-', 1, 0];
-   my $id = $gobj->id();
-   my $root = $self->root();
-   # $root->inc_counter();
-$root->{count}++;
-   my @ids_array = push @{$root->ids()}, $id;
-   $root->ids( \@ids_array );
-   my $current_node = $self->root();
-   for my $g (@$genotype) {
-      my $next_node =  $current_node->add_child($id, $g);
-      $current_node = $next_node;
-   }
-   return $current_node->depth() . " " . join(',', $current_node->ids());
+  my $self = shift;
+  my $gobj = shift ;
+  my $genotype = $gobj->sequence(); # ArrayRef, e.g. [0, 0, 1, 2, 1, 2, 2, 0, 0, 0, 1, 0, '-', 1, 0];
+  my $id = $gobj->id();
+  my $root = $self->root();
+  # $root->inc_counter();
+  $root->{count}++;
+  my @ids_array = push @{$root->ids()}, $id;
+  $root->ids( \@ids_array );
+  my $current_node = $self->root();
+  for my $g (@$genotype) {
+    my $next_node =  $current_node->add_child($id, $g);
+    $current_node = $next_node;
+  }
+  return $current_node->depth() . " " . join(',', $current_node->ids());
 }
 
 sub add_genotype_compact{
@@ -68,8 +68,8 @@ sub add_genotype_compact{
     $root->children()->{$ghead} = $new_node;
   }
   $self->size($self->size()+1);
-#  print "done adding genotype.\n\n";
- # exit if($self->size() > 20);
+  #  print "done adding genotype.\n\n";
+  # exit if($self->size() > 20);
 }
 
 sub search{
@@ -93,21 +93,23 @@ sub search{
   $matching_ids =~ s/,\s*$//;
   my @sorted_ids = sort {$a <=> $b} split(',', $matching_ids);
 
-  return( scalar @sorted_ids > 0)? $gobj->id() . "  " . join(",", @sorted_ids) . "\n" : '';
+  return( scalar @sorted_ids > 0)?
+    # $gobj->id() . "  " .
+    join(",", @sorted_ids) : '';
 }
 
 sub as_newick{
-   my $self = shift;
-   return $self->root()->newick_recursive();
+  my $self = shift;
+  return $self->root()->newick_recursive();
 }
 
 sub as_string{
-   my $self = shift;
-   my $leaves_only = shift // 0;
-   my $string = ($leaves_only)? 
-     $self->root()->leaves_as_string_recursive($leaves_only) : 
-       $self->root()->as_string_recursive($leaves_only);
-   return $string;
+  my $self = shift;
+  my $leaves_only = shift // 0;
+  my $string = ($leaves_only)? 
+    $self->root()->leaves_as_string_recursive($leaves_only) : 
+    $self->root()->as_string_recursive($leaves_only);
+  return $string;
 }
 
 

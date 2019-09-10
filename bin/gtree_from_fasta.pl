@@ -35,9 +35,11 @@ use Genotype;
   my $rng_seed = undef;
   my $p_missing = -1;		# prob. of missing data at each snp.
   my $algorithm = 'both';	# 'quick' or 'slow' or 'both'
+  my $fasta2 = undef;
 
   GetOptions(
-	     'input_filename=s' => \$input_filename,
+	     'input_filename|fasta1=s' => \$input_filename,
+	     'fasta2=s' => \$fasta2,
 	     'show_all!' => \$show_all,
 	     'compact_tree!' => \$compact,
 	     'newick_out!' => \$newick_out,
@@ -46,6 +48,8 @@ use Genotype;
 	     'p_missing=f' => \$p_missing,
 	     'algorithm=s' => \$algorithm,
 	    );
+
+  print STDERR "input file name: $input_filename\n";
 
   my %exhaustive_eqpairs = ();	# 
   my $ok = '---';
@@ -65,63 +69,23 @@ use Genotype;
 
   my $input_filename_stem = $input_filename;
   $input_filename_stem =~ s/\.\S+$//; # remove the part after the (last) '.'
-  my $input_string = '';
-  {
-    if (defined $input_filename) {
-      if (-f $input_filename) {
-	open my $fhin, "<", $input_filename or die "open $input_filename for reading failed.\n";
-	while (my $line = <$fhin>) {
-	  next if($line =~ /^\s*#/);
-	  $input_string .= $line;
-	}
-	close $fhin;
-      } else {
-	die "file $input_filename does not exist.\n";
-      }
-    } else {
-      die "Must specify input file with -input_filename .\n";
-    }
-  }
 
-  my @genotype_objects = ();
-  my $sequence_length = undef;
-  if ($input_filename =~ /\.fasta$/) {
-    my @fasta_lines = split ("\n", TomfyMisc::fasta2seqon1line($input_string));
-    while (@fasta_lines) {
-      my $line = shift @fasta_lines;
-      next if($line =~ /^\s*#/); # skip comment lines
-      if ($line =~ /^>(\S+)\s+(\S+)\s+(\S+)/) {
-	my ($id, $generation, $pedigree) = ($1, $2, $3);
-	my $sequence = shift @fasta_lines;
-	$sequence =~ s/\s+//g;
-	$sequence_length = length $sequence if(!defined $sequence_length);
-	die "Sequence lengths must all be the same.\n" if(length $sequence != $sequence_length);
-	$sequence = lose_data($sequence, $the_rng, $p_missing);
-	push @genotype_objects, Genotype->new(
-					      { id => $id,
-						generation => $generation,
-						pedigree => $pedigree,
-						sequence => $sequence }
-					     );
-      }
-    }
-  } else {
-    die "Input file must be fasta format. \n";
-  }
+  my ($sequence_length, $gobjects) = read_genotypes_from_fasta($input_filename, $the_rng, $p_missing);
+  my ($sequence_length2, $gobjects2) = read_genotypes_from_fasta($fasta2, $the_rng, $p_missing);
   $t1 = gettimeofday();
   print STDERR "time to read input, construct genotype objects: ", $t1-$t0, " sec.\n";
 
   ### do exhaustive comparison: ###
   my $ex_str = '';
   if ($algorithm ne 'quick') {
-    my $N = scalar @genotype_objects;
-    while (my($i, $g1) = each @genotype_objects) {
-      for my $j ($i+1 .. $N-1) {
-	my $g2 = $genotype_objects[$j];
+    my $N = scalar @$gobjects;
+    while (my($i, $g1) = each @$gobjects) {
+      for my $j (0 .. $N-1) {
+	my $g2 = $gobjects2->[$j];
 	if (compare_two_genotype_objects($g1, $g2) eq 'equal') {
-	  $exhaustive_eqpairs{$g1->id()} .= $g2->id() . ',';
-	  $exhaustive_eqpairs{$g2->id()} .= $g1->id() . ',' if($j != $i);
-	} else {		# nuthin
+	  # $exhaustive_eqpairs{$g1->id()} .= $g2->id() . ',';
+	  $exhaustive_eqpairs{$g2->id()} .= $g1->id() . ','; # if($j != $i);
+	} else {					     # nuthin
 	}
       }
     }
@@ -136,35 +100,47 @@ use Genotype;
       @eeks = sort { $a <=> $b } @eeks;
       $ex_str .=  "$anid  " . join(",", @eeks) . "\n" if(scalar @eeks > 0);
     }
-    print "[$ex_str]\n";
+    print "ex string: [$ex_str]\n";
   }
   $t2 = gettimeofday();
   #### end of exhaustive ####
-  
+
   my $quick_str = '';
   if ($algorithm ne 'slow') {
+    print $sequence_length // 'XXX', " \n";
     my $gtree = GenotypeTree->new( { depth => $sequence_length } );
-    for my $gobj (@genotype_objects) {
+    for my $gobj (@$gobjects) {
       #     $gobj->lose_data($the_rng, 0.5);
       if (!$compact) {
 	$gtree->add_genotype($gobj);
       } else {
-	$quick_str .= $gtree->search($gobj);
+	#	$quick_str .= $gtree->search($gobj);
 	$gtree->add_genotype_compact($gobj);
 	#	print $gtree->as_newick(), "\n\n" if($newick_out);
       }
     }
+
+    for my $gobj2 (@$gobjects2) {
+      $quick_str .= $gobj2->id() . "  " . $gtree->search($gobj2) . "\n";
+    }
+    print "exhaust str: [$ex_str]\n";
+    print "quick str:   [$quick_str]\n";
     $t3 = gettimeofday();
-    print STDERR "time to construct and search genotype tree: ", $t3-$t2, " sec.\n";
-  
+    print "time to construct and search genotype tree: ", $t3-$t2, " sec.\n";
+
     print "root ids:  ", $gtree->root()->id_as_string(), "\n";
     print $gtree->as_newick(), "\n\n" if($newick_out);
     $t3 = gettimeofday();
 
     #   print STDERR "time to do search tree for N genotypes: ", $t4-$t3, " sec.\n";
-    print "[$quick_str]\n";
-  }
+    
+ 
 
+    # search in tree for sequences from $fasta2 file
+    for my $gobj2 (@$gobjects2) {
+      print "Search result for:  [", $gobj2->id(), "]  [", $gtree->search($gobj2), "]\n";
+    }
+  }
   # check quick gives same edge set as exhaustive
   my %exedges = ();
   my %qedges = ();
@@ -187,24 +163,24 @@ use Genotype;
       $qedges{$edge_id} = 1;
     }
   }
-  if($algorithm eq 'both'){
-  $ok = 'equal';
-  my $bad_edge = 'undef';
-  for (keys %exedges) {
-    if (!exists $qedges{$_}) {
-      $ok = 'not equal';
-      $bad_edge = $_;
-      last;
+  if ($algorithm eq 'both') {
+    $ok = 'equal';
+    my $bad_edge = 'undef';
+    for (keys %exedges) {
+      if (!exists $qedges{$_}) {
+	$ok = 'not equal';
+	$bad_edge = $_;
+	last;
+      }
+    }
+    #print "ok: $ok \n";
+    if ($ok eq 'not equal') {
+      print "edge sets not equal. bad edge: $bad_edge \n";
+    } elsif ($ok eq 'equal') {
+      print "edge sets are equal \n";
+    } else {
     }
   }
-  #print "ok: $ok \n";
-  if ($ok eq 'not equal') {
-    print "edge sets not equal. bad edge: $bad_edge \n";
-  } elsif ($ok eq 'equal') {
-    print "edge sets are equal \n";
-  } else {
-  }
-}
   $t4 = gettimeofday();
   print STDERR "    input/gobjs   Nchoose2  treeconstrsearch  check       total    $ok \n";
   printf(STDERR "%12.3f %12.3f %12.3f %12.3f %12.3f \n",$t1-$t0, $t2-$t1, $t3-$t2, $t4-$t3, $t4-$t0);
@@ -243,3 +219,44 @@ sub compare_two_genotype_objects{
   return ($n_equal_characters == $L1)? 'equal' : 'unequal';
 }
 
+sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an array ref of genotype objects.
+  my $input_filename = shift;
+  my $the_rng = shift;
+  my $p_missing = shift // 0;
+  my $input_string = '';
+  if (-f $input_filename) {
+    open my $fhin, "<", $input_filename or die "open $input_filename for reading failed.\n";
+    while (my $line = <$fhin>) {
+      next if($line =~ /^\s*#/);
+      $input_string .= $line;
+    }
+    close $fhin;
+  } else {
+    die "file $input_filename does not exist.\n";
+  }
+
+  print STDERR "input file name: [$input_filename]\n";
+  my @genotype_objects = ();
+  my $sequence_length = undef;
+  my @fasta_lines = split ("\n", TomfyMisc::fasta2seqon1line($input_string));
+  while (@fasta_lines) {
+    my $line = shift @fasta_lines;
+    next if($line =~ /^\s*#/);	# skip comment lines
+    if ($line =~ /^>(\S+)\s+(\S+)\s+(\S+)/) {
+      my ($id, $generation, $pedigree) = ($1, $2, $3);
+      my $sequence = shift @fasta_lines;
+      print "the sequence $sequence \n";
+      $sequence =~ s/\s+//g;
+      $sequence_length = length $sequence if(!defined $sequence_length);
+      die "Sequence lengths must all be the same.\n" if(length $sequence != $sequence_length);
+      $sequence = lose_data($sequence, $the_rng, $p_missing);
+      push @genotype_objects, Genotype->new(
+					    { id => $id,
+					      generation => $generation,
+					      pedigree => $pedigree,
+					      sequence => $sequence }
+					   );
+    }
+  }
+  return ($sequence_length, \@genotype_objects);
+}

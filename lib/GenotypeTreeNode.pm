@@ -8,7 +8,7 @@ use constant MISSING_DATA => 'X';
 
 no warnings 'recursion';
 
-use constant DEBUG => 0;
+use constant DEBUG => 1;
 
 
 # a class for nodes of a tree.
@@ -20,7 +20,7 @@ has ids => (
 
 
 has count => (
-        #      traits => ['Counter'],
+	      #      traits => ['Counter'],
               isa => 'Int',
               is => 'rw',
               default => 0,
@@ -75,8 +75,8 @@ sub add_child{                  #
     $child_node = $self->children()->{$g};
     push @{$child_node->ids()}, $id;
   }
-#  $child_node->inc_counter();
-$child_node->{count}++;
+  #  $child_node->inc_counter();
+  $child_node->{count}++;
   return $child_node;
 }
 
@@ -148,39 +148,47 @@ sub add_genotype_compact{
   }
 }
 
+
 sub search_recursive{
   my $self = shift;
   my $id2 = shift;
   my $gt2s = shift;		# searching for this one.
-  my $gt1s = $self->genotype();
+  my $gt1s = $self->genotype(); # the genotype along the branch above this node.
   my ($L1, $L2) = (length $gt1s, length $gt2s);
 
-  #   assert ($L2 >= $L1) if DEBUG;
+  assert ($L2 >= $L1) if DEBUG;
+
+  if (keys %{$self->children()} == 0) {
+    assert ($L2 == $L1) if DEBUG;
+  }
   my $matching_id_string = '';
   my $n_equal_characters = 0;
-  for my $i (0 .. $L1 - 1) {
+  for my $i (0 .. $L1 - 1) { 
     my ($g1, $g2) = (substr($gt1s, $i, 1), substr($gt2s, $i, 1));
     last if($g1 ne MISSING_DATA  and  $g2 ne MISSING_DATA  and  $g2 ne $g1 );
     $n_equal_characters++;
   }
-  if ($L2 == $L1) {	 # moment of truth - this must be a leaf node.
-    if ($n_equal_characters == $L1) { # these are identical genotypes!!
+
+  if ($n_equal_characters < $L1) { # this branch is ruled out.
+  } else {
+    assert ($n_equal_characters == $L1) if DEBUG;
+    if ($L2 == $L1) {	 # moment of truth - this must be a leaf node.
+      # these are identical genotypes!
       $matching_id_string .= join(',', @{$self->ids()}) . ',';
-    } else { # the genotype searched for is not present in this branch.
-    }
-  } elsif ($L2 > $L1) {		# Ok so far, but must look further ...
-    substr($gt2s, 0, $n_equal_characters, '');
-    my $g2head = substr($gt2s, 0, 1);
-    if ($g2head eq MISSING_DATA) { # must check all subtrees
-      while ( my ($gh, $child) = each %{ $self->children() }) {
-	$matching_id_string .= $child->search_recursive($id2, $gt2s);
-      }
-    } else {
-      for my $gh ($g2head,MISSING_DATA) {
-	my $child = $self->children()->{$gh} // undef;
-	if (defined $child) {
-	  if ($gh eq $g2head  or  $gh eq MISSING_DATA) {
-	    $matching_id_string .= $child->search_recursive($id2, $gt2s);
+    } elsif ($L2 > $L1) {	# Ok so far, but must look further ...
+      substr($gt2s, 0, $n_equal_characters, '');
+      my $g2head = substr($gt2s, 0, 1);
+      if ($g2head eq MISSING_DATA) { # must check all subtrees
+	while ( my ($gh, $child) = each %{ $self->children() }) {
+	  $matching_id_string .= $child->search_recursive($id2, $gt2s);
+	}
+      } else {
+	for my $gh ($g2head, MISSING_DATA) {
+	  my $child = $self->children()->{$gh} // undef;
+	  if (defined $child) {
+	    if ($gh eq $g2head  or  $gh eq MISSING_DATA) {
+	      $matching_id_string .= $child->search_recursive($id2, $gt2s);
+	    }
 	  }
 	}
       }
@@ -188,6 +196,7 @@ sub search_recursive{
   }
   return $matching_id_string;
 }
+
 
 sub check_node{
   my $self = shift;
@@ -201,7 +210,7 @@ sub check_node{
     }
     my $ids_str = join(',', sort {$a <=> $b} @{$self->ids()});
     my $check_ids_str = join(',', sort {$a <=> $b} @check_ids);
-    print "[$ids_str]  [$check_ids_str] \n";
+    print "ids strs in check_node: [$ids_str]  [$check_ids_str] \n";
     $error += 100 if ($check_ids_str ne $ids_str);
   }
   return $error;
@@ -312,3 +321,52 @@ sub id_as_string{
 __PACKAGE__->meta->make_immutable;
 
 1;
+
+
+# sub search_recursive_old{
+#   my $self = shift;
+#   my $id2 = shift;
+#   my $gt2s = shift;		# searching for this one.
+#   my $gt1s = $self->genotype(); # the genotype along the branch above this node.
+#   my ($L1, $L2) = (length $gt1s, length $gt2s);
+
+#   assert ($L2 >= $L1) if DEBUG;
+
+#   if(keys % {$self->children()} == 0){
+# assert ($L2 == $L1);
+#   }
+#   my $matching_id_string = '';
+#   my $n_equal_characters = 0;
+#   for my $i (0 .. $L1 - 1) { 
+#     my ($g1, $g2) = (substr($gt1s, $i, 1), substr($gt2s, $i, 1));
+#     last if($g1 ne MISSING_DATA  and  $g2 ne MISSING_DATA  and  $g2 ne $g1 );
+#     $n_equal_characters++;
+#   }
+#   if ($L2 == $L1) {	 # moment of truth - this must be a leaf node.
+#     if ($n_equal_characters == $L1) { # these are identical genotypes!
+#       $matching_id_string .= join(',', @{$self->ids()}) . ',';
+#     } else { # the genotype searched for is not present in this branch.
+#     }
+#   } elsif ($L2 > $L1) {		# Ok so far, but must look further ...
+#     print "a search_reclusive. id2: $id2  L2 > L1 branch. $gt1s  $gt2s \n";
+#     substr($gt2s, 0, $n_equal_characters, '');
+#     print "b search_reclusive. id2: $id2  L2 > L1 branch. $gt1s  $gt2s \n";
+#     my $g2head = substr($gt2s, 0, 1);
+#     if ($g2head eq MISSING_DATA) { # must check all subtrees
+#       while ( my ($gh, $child) = each %{ $self->children() }) {
+# 	$matching_id_string .= $child->search_recursive($id2, $gt2s);
+#       }
+#     } else {
+#       for my $gh ($g2head, MISSING_DATA) {
+# 	my $child = $self->children()->{$gh} // undef;
+# 	if (defined $child) {
+# 	  if ($gh eq $g2head  or  $gh eq MISSING_DATA) {
+# 	    print "gt2s: $gt2s     gt1s: ", $child->genotype(), "\n";
+# 	    $matching_id_string .= $child->search_recursive($id2, $gt2s);
+# 	  }
+# 	}
+#       }
+#     }
+#   }
+#   return $matching_id_string;
+# }
