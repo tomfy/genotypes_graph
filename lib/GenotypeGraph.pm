@@ -258,7 +258,7 @@ sub search_for_best_match{
     #   print "$an_id  $dist    ";
     # }print "\n";
     my ($best_id, $best_dist) = $pq->best();
-    print "$init_node_id  $best_id  $best_dist     ";
+    print "$count_d_calcs  $best_id  $best_dist     ";
     $initid_bestmatchiddist{$gobj->id()} = $best_id . "_" . sprintf("%f6.4", $best_dist);
   }
   print "\n";
