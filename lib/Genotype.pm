@@ -283,10 +283,11 @@ double count_mismatches_up_to_limit_C(int max_mismatches, char* str1, char* str2
        mismatch_count++;
      }
      if(mismatch_count > max_mismatches){
-       return -1; // indicates number of mismatches > limit
-}
-  i++;
-}
+       return -1; /* indicates number of mismatches > limit */
+     }
+     i++;
+/* i is now the number of characters which have been compared without exceeding the mismatch limit. */
+  }
   return mismatch_count;
 }
 
