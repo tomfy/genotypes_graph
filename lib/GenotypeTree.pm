@@ -24,6 +24,12 @@ has size => (		  # number of genotypes which have been added.
 	     default => 0,
 	    );
 
+has count_search_recursive_calls => (
+                                     isa => 'Int',
+                                     is => 'ro',
+                                     default => 0,
+);
+
 # class to represent a tree of genotypes
 
 sub BUILD{
@@ -31,25 +37,9 @@ sub BUILD{
   $self->root()->tree($self);
 }
 
-sub add_genotype{
-  my $self = shift;
-  my $gobj = shift ;
-  my $genotype = $gobj->sequence(); # ArrayRef, e.g. [0, 0, 1, 2, 1, 2, 2, 0, 0, 0, 1, 0, '-', 1, 0];
-  my $id = $gobj->id();
-  my $root = $self->root();
-  # $root->inc_counter();
-  $root->{count}++;
-  my @ids_array = push @{$root->ids()}, $id;
-  $root->ids( \@ids_array );
-  my $current_node = $self->root();
-  for my $g (@$genotype) {
-    my $next_node =  $current_node->add_child($id, $g);
-    $current_node = $next_node;
-  }
-  return $current_node->depth() . " " . join(',', $current_node->ids());
-}
 
-sub add_genotype_compact{
+
+sub add_genotype{
   my $self = shift;
   my $gobj = shift;
   my $genotype_string = $gobj->sequence(); # entire (all snps) genotype as string.
@@ -58,7 +48,7 @@ sub add_genotype_compact{
   $root->add_id($id);
   my $ghead = substr($genotype_string, 0, 1);
   if (exists $root->children()->{$ghead}) {
-    $root->children()->{$ghead}->add_genotype_compact($id, $genotype_string);
+    $root->children()->{$ghead}->add_genotype($id, $genotype_string);
   } else {
     my $new_node = GenotypeTreeNode->new( {tree => $self,
 					   parent => $root,
@@ -121,3 +111,20 @@ __PACKAGE__->meta->make_immutable;
 1;
 
 
+# sub add_genotype_old{
+#   my $self = shift;
+#   my $gobj = shift ;
+#   my $genotype = $gobj->sequence(); # ArrayRef, e.g. [0, 0, 1, 2, 1, 2, 2, 0, 0, 0, 1, 0, '-', 1, 0];
+#   my $id = $gobj->id();
+#   my $root = $self->root();
+#   # $root->inc_counter();
+#   $root->{count}++;
+#   my @ids_array = push @{$root->ids()}, $id;
+#   $root->ids( \@ids_array );
+#   my $current_node = $self->root();
+#   for my $g (@$genotype) {
+#     my $next_node =  $current_node->add_child($id, $g);
+#     $current_node = $next_node;
+#   }
+#   return $current_node->depth() . " " . join(',', $current_node->ids());
+# }
