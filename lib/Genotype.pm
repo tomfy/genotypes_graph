@@ -76,7 +76,7 @@ sub distance{ # calculate distance between this genotype obj. and another
   my $other_gt = $other_genotype->sequence(); # string
 
   if (1) {		       # use inline::C function: (much faster)
-    return gg_distance($this_gt, $other_gt);
+    return distance_C($this_gt, $other_gt);
   } else {			# pure perl. much slower.
     my $distance = 0;
     my $count_both = 0; # count of snps with data present in both sequences
@@ -105,6 +105,13 @@ sub distance{ # calculate distance between this genotype obj. and another
     }
     return ($count_both > 0)? $distance/$count_both : 1000;
   }
+}
+
+sub count_mismatches_up_to_limit{
+  my $self = shift;
+  my $other_genotype = shift;
+  my $max_mismatches = shift;
+  return count_mismatches_up_to_limit_C($max_mismatches, $self->sequence(), $other_genotype->sequence());
 }
 
 sub mean{
@@ -206,30 +213,27 @@ __DATA__
 __C__
 
   /* distance between two genotype strings  */
-double gg_distance(char* str1, char* str2) {
-  int letters = 0;
-  int vowels = 0;
+/* 0-1, 1-2 -> d=1; 0-2 -> d=2  */
+double distance_C(char* str1, char* str2) {
   int i = 0;
   char c1;
-char c2;
- int dist = 0;
-int count = 0;
+  char c2;
+  int dist = 0;
+  int count = 0;
   while(c1 = str1[i]) {
-c2 = str2[i];
+    c2 = str2[i];
 
     if (c1 == '0') {
-
-if(c2 == '0'){
-count++;
-}else if(c2 == '1'){
-dist++;
-count++;
-}else if(c2 == '2'){
-dist += 2;
-count++;
-}
-
-}else if(c1 == '1'){
+      if(c2 == '0'){
+        count++;
+      }else if(c2 == '1'){
+        dist++;
+        count++;
+      }else if(c2 == '2'){
+        dist += 2;
+        count++;
+      } // else c2 is missing data
+    }else if(c1 == '1'){
 
 if(c2 == '0'){
 dist++;
@@ -263,5 +267,26 @@ if (count > 0) {
   return 1.0*dist/count;
 } else
   return 1000;
+}
+
+  
+  /* number of mismatches between to strings up to some max  */
+/* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
+double count_mismatches_up_to_limit_C(int max_mismatches, char* str1, char* str2) {
+  int i = 0;
+  char c1;
+  char c2;
+  int mismatch_count = 0;
+  while(c1 = str1[i]) {
+     c2 = str2[i];
+     if (c1 != c2) {
+       mismatch_count++;
+     }
+     if(mismatch_count > max_mismatches){
+       return -1; // indicates number of mismatches > limit
+}
+  i++;
+}
+  return mismatch_count;
 }
 
