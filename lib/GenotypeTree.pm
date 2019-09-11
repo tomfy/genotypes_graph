@@ -48,7 +48,7 @@ sub add_genotype{
   $root->add_id($id);
   my $ghead = substr($genotype_string, 0, 1);
   if (exists $root->children()->{$ghead}) {
-    $root->children()->{$ghead}->add_genotype($id, $genotype_string);
+    $root->children()->{$ghead}->add_genotype_recursive($id, $genotype_string);
   } else {
     my $new_node = GenotypeTreeNode->new( {tree => $self,
 					   parent => $root,

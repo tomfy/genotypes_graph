@@ -82,7 +82,7 @@ sub add_child{                  #
    return $child_node;
 }
 
-sub add_genotype{
+sub add_genotype_recursive{
    my $self = shift;
    my $id2 = shift;
    my $gt2s = shift;
@@ -134,7 +134,7 @@ sub add_genotype{
          my $gt2head = substr($gt2s, 0, 1);
          $self->add_id($id2);
          if (exists $self->children()->{$gt2head}) {
-            $self->children()->{$gt2head}->add_genotype($id2, $gt2s);
+            $self->children()->{$gt2head}->add_genotype_recursive($id2, $gt2s);
          } else {
             my $new_child = 
               GenotypeTreeNode->new( {tree => $self->tree(),
