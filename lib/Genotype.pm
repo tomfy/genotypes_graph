@@ -111,7 +111,10 @@ sub count_mismatches_up_to_limit{
   my $self = shift;
   my $other_genotype = shift;
   my $max_mismatches = shift;
-  return count_mismatches_up_to_limit_C($max_mismatches, $self->sequence(), $other_genotype->sequence());
+  my ($n_ok, $n_mm);
+  count_mismatches_up_to_limit_C($self->sequence(), $other_genotype->sequence(), $max_mismatches, $n_ok, $n_mm);
+  # print "aaa: $n_ok  $n_mm \n";
+  return ($n_ok, $n_mm);
 }
 
 sub mean{
@@ -269,10 +272,10 @@ if (count > 0) {
   return 1000;
 }
 
-  
-  /* number of mismatches between to strings up to some max  */
+
+/* number of mismatches between to strings up to some max  */
 /* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
-double count_mismatches_up_to_limit_C(int max_mismatches, char* str1, char* str2) {
+void count_mismatches_up_to_limit_C(char* str1, char* str2, int max_mismatches, SV* n_ok, SV* n_mm) {
   int i = 0;
   char c1;
   char c2;
@@ -283,11 +286,20 @@ double count_mismatches_up_to_limit_C(int max_mismatches, char* str1, char* str2
        mismatch_count++;
      }
      if(mismatch_count > max_mismatches){
-       return -1; /* indicates number of mismatches > limit */
+       mismatch_count = -1;
+       break;
      }
      i++;
 /* i is now the number of characters which have been compared without exceeding the mismatch limit. */
   }
-  return mismatch_count;
+ /* Inline_Stack_Vars;
+  Inline_Stack_Reset;
+  Inline_Stack_Push(sv_2mortal(newSVuv(i)));
+  Inline_Stack_Push(sv_2mortal(newSVuv(mismatch_count)));
+  Inline_Stack_Done; */
+
+  sv_setiv(n_ok, i);
+  sv_setiv(n_mm, mismatch_count);
+
 }
 

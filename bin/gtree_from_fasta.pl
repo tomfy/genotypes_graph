@@ -8,7 +8,7 @@ use lib '/home/tomfy/Orthologger/lib/';
 use TomfyMisc qw ' fasta2seqon1line ';
 use constant MISSING_DATA => 'X';
 use Math::GSL::RNG  qw( :all );
-#use Inline 'C';
+use Inline 'C';
 
 no warnings 'recursion';
 
@@ -91,7 +91,16 @@ use Genotype;
     while (my($i, $g1) = each @$gobjects) {
       for my $j (0 .. (@$gobjects2-1)) {
 	my $g2 = $gobjects2->[$j];
-	my $n_mismatches = $g1->count_mismatches_up_to_limit($g2, $max_mismatches); # inline C
+	my $n_mismatches;
+	# if(0){
+	#   my ($n_ok, $n_mm); # = $g1->count_mismatches_up_to_limit($g2, $max_mismatches); # inline C
+	#   #count_mismatches_up_to_limit($g2, $max_mismatches); # inline C
+	#   count_oks_and_mismatches_up_to_limit_C($g1->sequence(), $g2->sequence(), $max_mismatches, $n_ok, $n_mm);
+	#   #  print "$i $j $n_ok $n_mm \n";
+	#   $n_mismatches = $n_mm;
+	# }else{
+	  $n_mismatches = count_mismatches_up_to_limit_C($g1->sequence(), $g2->sequence(), $max_mismatches);
+#	}
 	if ($n_mismatches >= 0) {
 	  $exhaustive_eqpairs{$g2->id()} .= $g1->id() . ',';
 	} else {		# nuthin
@@ -129,8 +138,8 @@ use Genotype;
     for my $gobj2 (@$gobjects2) {
       $quick_str .= $gobj2->id() . "  " . $gtree->search($gobj2, $max_mismatches) . "\n";
     }
-    #  print "exhaust str: [\n$ex_str]\n";
-    #  print "quick str:   [\n$quick_str]\n";
+   #print "exhaust str: [\n$ex_str]\n";
+   #print "quick str:   [\n$quick_str]\n";
     $t4 = gettimeofday();
     $t3_4 = $t4 - $t3;
     $t2_4 = $t4 - $t2;
@@ -303,29 +312,42 @@ sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an a
 }
 
 
-# __DATA__
+__DATA__
 
 # ############################################
 # ########### inline C stuff #################
-# __C__
+__C__
 
-#   /* number of mismatches between to strings up to some max  */
-# /* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
-# double count_mismatches_up_to_limit_C(int max_mismatches, char* str1, char* str2) {
-#   int i = 0;
-#   char c1;
-#   char c2;
-#   int mismatch_count = 0;
-#   while(c1 = str1[i]) {
-#      c2 = str2[i];
-#      if (c1 != c2) {
-#        mismatch_count++;
-#      }
-#      if(mismatch_count > max_mismatches){
-#        return -1; // indicates number of mismatches > limit
-# }
-#   i++;
-# }
-#   return mismatch_count;
-# }
+#define MISSING_DATA 'X'
+
+ /* number of mismatches between two strings up to some max  */
+ /* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
+int count_mismatches_up_to_limit_C(char* str1, char* str2, int max_mismatches) {
+  int i = 0;
+  char c1;
+  char c2;
+  int mismatch_count = 0;
+  while(c1 = str1[i]) {
+    if(c1 != MISSING_DATA){
+      c2 = str2[i];
+      if(c2 != MISSING_DATA){
+        if (c1 != c2) {
+          mismatch_count++;
+        }
+        if(mismatch_count > max_mismatches){
+          return -1; // indicates number of mismatches > limit
+        }
+      }
+    }
+    i++;
+  }
+  return mismatch_count;
+}
+
+// lines to use in alternative way of get multiple values back from Inline::C function
+ /* Inline_Stack_Vars;
+  Inline_Stack_Reset;
+  Inline_Stack_Push(sv_2mortal(newSViv(i)));
+  Inline_Stack_Push(sv_2mortal(newSViv(mismatch_count)));
+  Inline_Stack_Done; */
 
