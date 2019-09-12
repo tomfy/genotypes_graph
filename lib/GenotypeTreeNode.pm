@@ -335,10 +335,11 @@ __PACKAGE__->meta->make_immutable;
 
 1;
 
-__DATA__
-
 # ############################################
 # ########### inline C stuff #################
+
+__DATA__
+
 __C__
 
 #define MISSING_DATA 'X'
