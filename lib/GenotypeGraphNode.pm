@@ -41,19 +41,6 @@ has genotype => (
                  required => 1,
 		);
 
-
-# sub BUILD {
-#   my $self = shift;
-#   my %nearestid_distance = ();
-#   for my $idB (@{$self->neighbor_ids()}) {
-#     #     print "idB:  $idB \n";
-#     $nearestid_distance{$idB} = $self->neighbor_id_distance()->{$idB};
-#   }
-#   $self->neighbor_id_distance(\%nearestid_distance);
-#   #  $self->{furthest_id_distance} = [$furthest_id => $furthest_distance];
-#   return $self;
-# }
-
 sub as_string{
   my $self = shift;
   my $show_sequence = shift // 0;
