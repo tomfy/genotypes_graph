@@ -91,7 +91,9 @@ use TomfyMisc qw ' fasta2seqon1line ';
 					     n_extras => $n_extras,
 					   }
                                           );
-    }
+    }elsif($inpute_filename =~ /\.dmatrix/)[
+
+					  }
 
    #  for(my $i = 0; $i < 100; $i++){
    for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
