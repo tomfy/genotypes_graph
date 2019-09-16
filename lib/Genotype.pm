@@ -326,9 +326,9 @@ double distances_C(int start, int n_homozyg, char* str1, char* str2, SV* dist, S
             if((count_0022 + count_02) >= n_homozyg){ break; }  // stop after len homozygous-only pairs
          } // end of while
 
-         double homozyg_denom = count_0022 + count_02; # both genotypes of pair homozygous
-         double other_denom = count_11 + count_1x; # 0 or 1 genotypes of pair are homozygous ( no missing data)
-         double all_denom = h_denom + other_denom; # all except if there is missing data
+         double homozyg_denom = count_0022 + count_02; // both genotypes of pair homozygous
+         double other_denom = count_11 + count_1x; // 0 or 1 genotypes of pair are homozygous ( no missing data)
+         double all_denom = homozyg_denom + other_denom; // all except if there is missing data
 
      double homozyg_dist = (homozyg_denom > 0)? count_02/homozyg_denom : 1000;
      double other_dist = (other_denom > 0)? count_1x/other_denom : 1000;
