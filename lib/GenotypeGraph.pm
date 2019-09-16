@@ -119,7 +119,7 @@ around BUILDARGS => sub {
    } elsif (defined $args->{idnnd}) {
       # construct from file with info on nearest neighbors to each node. typical line:
       # 290  2  ((()26,()24)218,(()52,()22)176)290    176  0.383   218  0.42   274  0.482   354  0.501   52  0.502   ...   328  0.757
-      my $n_near = BIG_NUMBER;
+      my $n_near = BIG_NUMBER; # just keep everything in the .graph file
       my %idA__idB_distance = (); # hash of hash refs
       my $id_node = {};
       my @graph_string_lines = split("\n", $args->{idnnd});
@@ -236,9 +236,9 @@ sub search_for_best_match{
 
             $id_status->{$an_id} = 1; # this one has been checked!
 
-            print "$d  ", join('  ', map($_ // '-', $pq->peek_best())), "  ",
-              "$a_dist  ", join('  ', map($_ // '-', $pq_a->peek_best())), "  ",
-                "$h_dist  ", join('  ', map($_ // '-', $pq_h->peek_best())), "\n";
+            print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  ",
+              join(' ', map($_ // '-', $pq_a->peek_best())), " $a_dist  ",
+               join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
          }
 
          $count_rounds++;
@@ -272,7 +272,9 @@ sub search_for_best_match{
       #   print "$an_id  $dist    ";
       # }print "\n";
       my ($best_id, $best_dist) = $pq->best();
-      print STDERR "$count_d_calcs  $best_id  $best_dist     ";
+      print STDERR "$count_d_calcs  $best_id  $best_dist   ";
+      my ($nextbest_id, $nextbest_dist) = $pq->best();
+      print STDERR "$nextbest_id  $nextbest_dist   ";
       $initid_bestmatchiddist{$gobj->id()} = $best_id . "_" . sprintf("%f6.4", $best_dist);
    }
    print STDERR "\n";
