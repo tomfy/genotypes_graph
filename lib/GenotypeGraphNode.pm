@@ -35,7 +35,7 @@ has neighbor_id_distance => (		# should be just the neighbors.
                     required => 1,
                    );
 
-has genotype => (
+has genotype => (  # Genotype object
                  isa => 'Object',
                  is => 'ro',
                  required => 1,
