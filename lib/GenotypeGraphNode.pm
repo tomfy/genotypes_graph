@@ -29,7 +29,7 @@ has id => (
 # 		     required => 0,
 # 		    );
 
-has neighbor_id_distance => (		# should be just the neighbors. 
+has neighbor_id_distance => (  # keys: ids, values: distances of neighbor nodes
                     isa => 'HashRef',
                     is => 'rw',
                     required => 1,
@@ -46,7 +46,7 @@ sub as_string{
   my $show_sequence = shift // 0;
   my $str = $self->id() . '  ' . $self->genotype()->generation() . '  ' . $self->genotype()->pedigree() . '   ';
   my @nn_ids =
-    #    sort { $a <=> $b }  # uncomment to sort by id
+    sort { $a <=> $b }  # uncomment to sort by id
     keys %{$self->neighbor_id_distance()};
     #    @{$self->neighbor_ids()};	# sort by id
   

@@ -2,7 +2,7 @@
 use strict;
 use warnings;
 use List::Util qw (min max sum);
-
+use Time::HiRes qw( gettimeofday );
 use File::Basename 'dirname';
 use Cwd 'abs_path';
 my ( $bindir, $libdir );
@@ -39,7 +39,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'input_filename|fasta1|f1|stem=s' => \$input_filename,
 	     'fasta2|f2=s' => \$other_fasta,
 	     'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
-	     'distance_matrix_out!' => \$output_distance_matrix,
+	     'distance_matrix_out|dmatrix!' => \$output_distance_matrix,
 	     'graph_out!' => \$output_graph,
 	     'multiplier=i' => \$multiplier,
 	     'sequence_out!' => \$show_sequence,
@@ -63,41 +63,50 @@ use TomfyMisc qw ' fasta2seqon1line ';
     "Will construct graph from .graph or .dmatrix file\n",
     "No sequence info; no search possible.\n";;
 
-
   my $genotype_graph;
 
-
+  my $t0 = gettimeofday();
   my $input_string;
-  if (-f ($input_filename = $input_filename_stem . '.graph')  and 1) { # .graph file exists - construct graph from it.
-     print ".graph file: $input_filename\n";
+  if (-f ($input_filename = $input_filename_stem . '.graph')  and 0) { # .graph file exists - construct graph from it.
+    print STDERR "# Constructing graph from .graph file: $input_filename\n";
     $input_string =  file_to_string($input_filename);
     $genotype_graph = GenotypeGraph->new(
-					 { fasta => $fasta1_string,
-                                          idnnd => $input_string}
+					 { fasta_string => $fasta1_string,
+					   graph_string => $input_string}
 					);
- 
-  } elsif (-f ($input_filename = $input_filename_stem . '.dmatrix') and 0 ) {
-    $input_string =  file_to_string($input_filename);
-    $genotype_graph = GenotypeGraph->new(
-					 { dmatrix => $input_string,
-					   n_near => $n_nearest_to_keep,
-					   n_extras => $n_extras,
-					 }
-					);
-  } elsif (-f ($input_filename = $input_filename_stem . '.fasta')  ) {
-    my $fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($input_filename));
-#die "[$fasta_string]\n";   die; 
-    $genotype_graph = GenotypeGraph->new(
-					 { fasta => $fasta_string,
-					   n_near => $n_nearest_to_keep,
-					   n_extras => $n_extras,
-					 }
-					);
-  }
 
-exit;
- 
-  if (defined $other_fasta  and  -f $other_fasta) {
+  } elsif (-f ($input_filename = $input_filename_stem . '.dmatrix') and 1 ) {
+    print STDERR "# Constructing graph from .dmatrix file: $input_filename\n";
+    $input_string =  file_to_string($input_filename);
+    print "AAA: [$input_string]\n";
+    $genotype_graph = GenotypeGraph->new(
+					 {  fasta_string => $fasta1_string,
+					    dmatrix_string => $input_string,
+					    n_near => $n_nearest_to_keep,
+					    n_extras => $n_extras,
+					 }
+					);
+
+  } elsif (-f ($input_filename = $input_filename_stem . '.fasta')  ) {
+    print STDERR "# Constructing graph from .fasta file: $input_filename\n";
+    my $fasta1_string = TomfyMisc::fasta2seqon1line(file_to_string($input_filename));
+    # print "[$fasta_string]\n";
+    $genotype_graph = GenotypeGraph->new(
+					 { fasta_string => $fasta1_string,
+					   n_near => $n_nearest_to_keep,
+					   n_extras => $n_extras,
+					 }
+					);
+
+  }
+  my $t1 = gettimeofday();
+
+die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
+  
+ exit;
+
+# ###########  Search  ####################
+  if (0 and defined $other_fasta  and  -f $other_fasta) {
      my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
      my $other_id_gobjs = GenotypeGraph::fasta_string_to_gobjs($other_fasta_string);
 
@@ -109,7 +118,10 @@ exit;
         $g_to_search_for->add_noise($error_prob);
         $genotype_graph->search_for_best_match($g_to_search_for, $search_pq_size);
      }
-  }
+   }
+   my $t2 = gettimeofday();
+# ############## end of search  ##############
+
   if ($output_graph) {
      my $graph_out_filename = $input_filename_stem . '.graph';
      open my $fhout, ">", $graph_out_filename or die "Couldn't open $graph_out_filename for writing.\n";
@@ -122,6 +134,8 @@ exit;
     print $fhout $genotype_graph->distance_matrix_as_string($multiplier);
     close $fhout;
   }
+  my $t3 = gettimeofday();
+  printf("times: construct: %12.3f  search: %12.3f  output: %12.3f  total: %12.3f\n", $t1-$t0, $t2-$t1, $t3-$t2, $t3-$t0);
 }                               # end main
 
 
