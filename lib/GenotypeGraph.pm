@@ -1,8 +1,8 @@
 package GenotypeGraph;
 use strict;
 use warnings;
-# use Moose;
-use Mouse;
+use Moose;
+#use Mouse;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
@@ -25,11 +25,12 @@ has nodes => (
 has n_near => (
 	       isa => 'Int', # the number of outward edges to keep in the graph for each node.
 	       is => 'ro',
-	       default => BIG_NUMBER, # -> keep all edges.
+	       default => 10000000, # BIG_NUMBER, # -> keep all edges.
 	      );
+
 has n_extras =>  (
 		  isa => 'Int', # the number randomly chosen nodes to add as neighbors in addition to near ones.
-		  is => 'ro',
+		  is => 'rw',
 		  default => 0, # just keep the closest ones.
 		 );
 
@@ -44,10 +45,64 @@ around BUILDARGS => sub {
    my $class = shift;
 
    my $args = shift; # hash ref, e.g. { fasta => <a fasta string for several sequences> , n_near => 5 }
-   if (defined $args->{fasta} ) { # construct from fasta string
-      # print $args->{fasta}, "\n";
+   die "fasta file not defined.\n" if (! defined $args->{fasta} ) ;
+
+   my $fasta_str = $args->{fasta};
       my $id_gobj = {};
-      $id_gobj = fasta_string_to_gobjs($args->{fasta});
+      $id_gobj = fasta_string_to_gobjs($fasta_str); # $args->{fasta});
+   if (defined $args->{idnnd}) { # construct from .graph file
+      # construct from file with info on nearest neighbors to each node. typical line:
+      # 290  2  ((()26,()24)218,(()52,()22)176)290    176  0.383   218  0.42   274  0.482   354  0.501   52  0.502   ...   328  0.757
+      my $n_near = BIG_NUMBER; # just keep everything in the .graph file
+      my %idA__idB_distance = (); # hash of hash refs
+      my $id_node = {};
+      my @graph_string_lines = split("\n", $args->{idnnd});
+      #  my $multiplier = 1;
+      for my $line (@graph_string_lines) {
+         next if($line =~ /^\s*#/);
+         # $multiplier = $1 if(/#\s+(\S+)/;
+         $line =~ s/^\s*(\S+)\s+(\S+)\s+(\S+)\s+//;
+ #        print "XXX $line \n";
+         my ($id1, $generation, $pedigree) = ($1, $2, $3);
+#         print "$id1, $generation, $pedigree \n";
+         $line =~ s/\.{3}\s+(\S+)\s+(\S+)/.../;
+         my ($furthest_id, $furthest_d) = ($1, $2);
+#         print "$furthest_id  $furthest_d \n";
+         my $sequence = ($line =~ /\s*\.{3}\s+(\S+)\s*$/)? $1 : '---';
+         $line =~ s/\s*\.{3}.*$//;
+         my $neighborid_dist = ();
+         my @neighbor_ids = ();
+         while ($line) {
+            $line =~ s/\s*(\S+)\s+(\S+)\s*//;
+            my ($id2, $dist) = ($1, $2);
+            $neighborid_dist->{$id2} = $dist;
+            push @neighbor_ids, $id2;
+         }
+         $n_near = min($n_near, scalar @neighbor_ids);
+    #     my $gobj = Genotype->new( '>' . "$id1 $generation $pedigree\n" . $sequence );
+         my $gobj = $id_gobj->{$id1};
+     #    print "gobj as string:   $id1   ", $gobj->sequence(), "\n";
+         my $a_node = GenotypeGraphNode->new( {
+                                               id => $id1,
+                                               genotype => $gobj, # genotype object
+                                               #		    neighbor_ids => \@neighbor_ids,
+                                               neighbor_id_distance => $neighborid_dist,
+                                               #           furthest_id_distance => [$furthest_id, $furthest_d],
+                                              } );
+         $id_node->{$id1} = $a_node;
+
+      }
+      return {
+              nodes => $id_node,
+              distances => \%idA__idB_distance,
+             };
+
+   } elsif (defined $args->{dmatrix}) { # construct from .dmatrix file
+
+   } else {                     # construct from .fasta string
+      my $fasta_str = $args->{fasta};
+      my $id_gobj = {};
+      $id_gobj = fasta_string_to_gobjs($fasta_str); # $args->{fasta});
       # calculate and store distances (N choose 2 of them)
       my %idA__idB_distance = (); # hash of hash refs
       my @ids = sort { $a <=> $b } keys %$id_gobj;
@@ -116,53 +171,7 @@ around BUILDARGS => sub {
               n_extras => $n_extras,
               distances => \%idA__idB_distance,
              };
-   } elsif (defined $args->{idnnd}) {
-      # construct from file with info on nearest neighbors to each node. typical line:
-      # 290  2  ((()26,()24)218,(()52,()22)176)290    176  0.383   218  0.42   274  0.482   354  0.501   52  0.502   ...   328  0.757
-      my $n_near = BIG_NUMBER; # just keep everything in the .graph file
-      my %idA__idB_distance = (); # hash of hash refs
-      my $id_node = {};
-      my @graph_string_lines = split("\n", $args->{idnnd});
-      #  my $multiplier = 1;
-      for my $line (@graph_string_lines) {
-         next if($line =~ /^\s*#/);
-         # $multiplier = $1 if(/#\s+(\S+)/;
-         $line =~ s/^\s*(\S+)\s+(\S+)\s+(\S+)\s+//;
-         print "XXX $line \n";
-         my ($id1, $generation, $pedigree) = ($1, $2, $3);
-         print "$id1, $generation, $pedigree \n";
-         $line =~ s/\.{3}\s+(\S+)\s+(\S+)/.../;
-         my ($furthest_id, $furthest_d) = ($1, $2);
-         print "$furthest_id  $furthest_d \n";
-         my $sequence = ($line =~ /\s*\.{3}\s+(\S+)\s*$/)? $1 : '---';
-         $line =~ s/\s*\.{3}.*$//;
-         my $neighborid_dist = ();
-         my @neighbor_ids = ();
-         while ($line) {
-            $line =~ s/\s*(\S+)\s+(\S+)\s*//;
-            my ($id2, $dist) = ($1, $2);
-            $neighborid_dist->{$id2} = $dist;
-            push @neighbor_ids, $id2;
-         }
-         $n_near = min($n_near, scalar @neighbor_ids);
-         my $gobj = Genotype->new( '>' . "$id1 $generation $pedigree\n" . $sequence );
-         print "gobj as string:  ", $gobj->id(), "  ", join('', @{$gobj->sequence()}), "\n";
-         my $a_node = GenotypeGraphNode->new( {
-                                               id => $id1,
-                                               genotype => $gobj, # genotype object
-                                               #		    neighbor_ids => \@neighbor_ids,
-                                               neighbor_id_distance => $neighborid_dist,
-                                               #           furthest_id_distance => [$furthest_id, $furthest_d],
-                                              } );
-         $id_node->{$id1} = $a_node;
-      }
-      return {
-              nodes => $id_node,
-              n_near => $n_near,
-              n_extras => undef, 
-              distances => \%idA__idB_distance,
-             };
-   }                            # end of
+   }                         # end of
 
    # otherwise do nothing.
 }; # end of BUILDARGS
@@ -238,7 +247,7 @@ sub search_for_best_match{
 
             print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  ",
               join(' ', map($_ // '-', $pq_a->peek_best())), " $a_dist  ",
-               join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
+                join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
          }
 
          $count_rounds++;

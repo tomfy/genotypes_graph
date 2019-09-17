@@ -58,7 +58,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   $input_filename_stem =~ s/\.(fasta|graph|dmatrix)$//; # remove the part after the last '.'
   my $fasta1_filename = $input_filename_stem . '.fasta'; # get an array or hash of Genotype objs from this fasta file. 
   my $fasta1_string = (-f $fasta1_filename)?
-    file_to_string($input_filename)
+    file_to_string($fasta1_filename)
     :  print STDERR "Specified fasta file does not exit.\n",
     "Will construct graph from .graph or .dmatrix file\n",
     "No sequence info; no search possible.\n";;
@@ -66,14 +66,14 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   my $genotype_graph;
 
+
   my $input_string;
-  if (-f ($input_filename = $input_filename_stem . '.graph')  and 0) { # .graph file exists - construct graph from it.
+  if (-f ($input_filename = $input_filename_stem . '.graph')  and 1) { # .graph file exists - construct graph from it.
+     print ".graph file: $input_filename\n";
     $input_string =  file_to_string($input_filename);
     $genotype_graph = GenotypeGraph->new(
-					 { idnnd => $input_string,
-					   n_near => $n_nearest_to_keep,
-					   n_extras => $n_extras,
-					 }
+					 { fasta => $fasta1_string,
+                                          idnnd => $input_string}
 					);
  
   } elsif (-f ($input_filename = $input_filename_stem . '.dmatrix') and 0 ) {
@@ -85,7 +85,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
 					 }
 					);
   } elsif (-f ($input_filename = $input_filename_stem . '.fasta')  ) {
-    my $fasta_string = TomfyMisc::fasta2seqon1line($input_string);
+    my $fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($input_filename));
+#die "[$fasta_string]\n";   die; 
     $genotype_graph = GenotypeGraph->new(
 					 { fasta => $fasta_string,
 					   n_near => $n_nearest_to_keep,
@@ -94,40 +95,25 @@ use TomfyMisc qw ' fasta2seqon1line ';
 					);
   }
 
-  # my $genotype_graph;
-
-  # if ($input_filename =~ /\.fasta$/) {
-  #    my $fasta_string = TomfyMisc::fasta2seqon1line($input_string);
-  #    $genotype_graph = GenotypeGraph->new(
-  #                                         { fasta => $fasta_string,
-  #                                           n_near => $n_nearest_to_keep,
-  # 					     n_extras => $n_extras,
-  # 					   }
-  #                                        );
-  # } elsif ($input_filename =~ /\.graph/) {
-  #    $genotype_graph = GenotypeGraph->new(
-  #                                         { idnnd => $input_string,
-  #                                           n_near => $n_nearest_to_keep,
-  # 					     n_extras => $n_extras,
-  # 					   }
-  #                                        );
+exit;
  
-  my $other_fasta_string = (defined $other_fasta)?  TomfyMisc::fasta2seqon1line(file_to_string($other_fasta)) : $input_string;
-  my $other_id_gobjs = GenotypeGraph::fasta_string_to_gobjs($other_fasta_string);
+  if (defined $other_fasta  and  -f $other_fasta) {
+     my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
+     my $other_id_gobjs = GenotypeGraph::fasta_string_to_gobjs($other_fasta_string);
 
-  #  for(my $i = 0; $i < 100; $i++){
-  #  for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
-  for my $g_to_search_for (values %$other_id_gobjs) {
-    #  my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);
-    $g_to_search_for->{id} += 100000;
-    $g_to_search_for->add_noise($error_prob);
-    $genotype_graph->search_for_best_match($g_to_search_for, $search_pq_size);
+     #  for(my $i = 0; $i < 100; $i++){
+     #  for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
+     for my $g_to_search_for (values %$other_id_gobjs) {
+        #  my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);
+        $g_to_search_for->{id} += 100000;
+        $g_to_search_for->add_noise($error_prob);
+        $genotype_graph->search_for_best_match($g_to_search_for, $search_pq_size);
+     }
   }
-
   if ($output_graph) {
-    my $graph_out_filename = $input_filename_stem . '.graph';
-    open my $fhout, ">", $graph_out_filename or die "Couldn't open $graph_out_filename for writing.\n";
-    print $fhout $genotype_graph->as_string($show_sequence);
+     my $graph_out_filename = $input_filename_stem . '.graph';
+     open my $fhout, ">", $graph_out_filename or die "Couldn't open $graph_out_filename for writing.\n";
+     print $fhout $genotype_graph->as_string($show_sequence);
     close $fhout;
   }
   if ($output_distance_matrix) {
