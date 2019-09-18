@@ -79,6 +79,7 @@ sub distance{ # calculate distance between this genotype obj. and another
    if (1) {		       # use inline::C function: (much faster)
       my ($d, $agmr, $hgmr, $ogmr);
       distances_C(0, BIG_NUMBER, $this_gt, $other_gt, $d, $agmr, $hgmr, $ogmr);
+#      printf("%10.6f %10.6f, %10.6f, %10.6f \n", $d, $agmr, $hgmr, $ogmr);
       return ($d, $agmr, $hgmr, $ogmr);
    } else {			# pure perl. much slower.
       my $distance = 0;
@@ -267,7 +268,7 @@ count++;
 
 i++;
 }
-  // printf("%d  %d \n", dist, count);
+  printf("%d  %d \n", dist, count);
 if (count > 0) {
    //  printf("%g\n", 1.0*dist/count);
    return 1.0*dist/count;
@@ -330,6 +331,7 @@ double distances_C(int start, int n_homozyg, char* str1, char* str2, SV* dist, S
          double other_denom = count_11 + count_1x; // 0 or 1 genotypes of pair are homozygous ( no missing data)
          double all_denom = homozyg_denom + other_denom; // all except if there is missing data
 
+//	 printf("%8d %8d %8d %8d   %8.1f\n", count_0022, count_02, count_11, count_1x, all_denom);
      double homozyg_dist = (homozyg_denom > 0)? count_02/homozyg_denom : 1000;
      double other_dist = (other_denom > 0)? count_1x/other_denom : 1000;
      double all_dist = (all_denom > 0)? (count_1x + count_02)/all_denom : 1000;

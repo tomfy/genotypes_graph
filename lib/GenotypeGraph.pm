@@ -92,154 +92,71 @@ around BUILDARGS => sub {
 
    } elsif (defined $args->{dmatrix_string}) { # construct from .dmatrix file
     
-      # read in and store distances from
-      my %idA__idB_distance = (); # hash of hash refs
-   #   print "AA: [", $args->{dmatrix_string}, "]\n";
+      # read in and store distances from .dmatrix file.
+      my $idA__idB_distance = {}; # hash ref of hash refs
       my @lines = split("\n", $args->{dmatrix_string});
       my $first_line = shift @lines;
       my $multiplier = ($first_line =~ /#\s+(\d+)/)? $1 : undef;
       my @dm_ids = map($_*1, split(" ", shift @lines));
-  #    print "dm ids: ", join(' ', @dm_ids), "\n";
-      #    print "n lines in dmatrix string: ", scalar @md
       while (my($i, $line) = each @lines) {
          $line =~ s/^\s+//;
-#print "ZZZZZ: [$line]\n";
          my @distances = split(/\s+/, $line); # except that the first col is id
-#print "zzzz: [", join(', ', @distances), "]\n";
-         #print "id&dists: ", join(" ", @distances), "\n";
          my $id1 = shift @distances;
-  #       printf("AAA id: [%4d]\n", $id1); #     "; map(printf("%3d ", $_), @dm_ids); print "\n";
          while (my($j, $d) = each @distances) {
             $d /= (defined $multiplier)? $multiplier : 1;
             my $id2 = $dm_ids[$j + $i + 1];
-            #   print "i, j, id2:  $i, $j, ", $id2 // '---', "\n";
-            if (!exists $idA__idB_distance{$id1}) {
-               $idA__idB_distance{$id1} = {$id2 => $d};
-            } else {
-               $idA__idB_distance{$id1}->{$id2} = $d;
-            }
-            if (!exists $idA__idB_distance{$id2}) {
-               $idA__idB_distance{$id2} = {$id1 => $d};
-            } else {
-               $idA__idB_distance{$id2}->{$id1} = $d;
-            }
+	    store_idAidBdistance($idA__idB_distance, $id1, $id2, $d);
          }
       }
-  #    print "ids:  ", join(' ', @ids), "\n";
- #     print "keys:  ", join(' ', sort {$a <=> $b} keys %idA__idB_distance), "\n";
       # for each genotype, find the nearest neighbors and construct node.
-      my $id_node = {};
+   #   my $id_node = {};
       my $n_near = $args->{n_near} // BIG_NUMBER;
       $n_near = min($n_near, $n_nodes-1);
       my $n_extras = $args->{n_extras};
 
-      while ( my ($i, $id1) = each @ids) {
-         my $id2_dist = $idA__idB_distance{$id1};
-     #    print "$id1  ", join(', ', %$id2_dist), "\n";
-         my $count = 0;
-         my @neighbor_ids;
-         my $m = 'pq';
-         if ($m eq 'qsel') { # using quickselect algorithm (a bit faster)
-            @neighbor_ids = quickselect([keys %$id2_dist], $n_near, $id2_dist);
-            @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
-         } elsif ($m eq 'sort') { # sort the whole set of nodes (a bit slower)
-            @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
-            @neighbor_ids = @neighbor_ids[0 .. $n_near-1] if($n_near < scalar keys %$id2_dist);
-         } else {          # a bit faster than qsel for small $n_near 
-            my $pq = MyPriorityQueue->new($n_near, $id2_dist);
-            @neighbor_ids = @{ $pq->{queue} };
-         }
-         my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
-         get_extra_ids($id2_dist, \@neighbor_ids, \%neighborid_dist, $n_extras);
-
-         $id_node->{$id1} = GenotypeGraphNode->new( {
-                                                     id => $id1,
-                                                     genotype => $id_gobj->{$id1}, # genotype object
-                                                     #		    neighbor_ids => \@neighbor_ids,
-                                                     neighbor_id_distance => \%neighborid_dist,
-                                                    } );
-
-      }				# end node construction loop
+      my $id_node = construct_nodes($id_gobj, $idA__idB_distance, $n_near, $n_extras);
 
       return {
               nodes => $id_node,
               n_near => $n_near,
               n_extras => $n_extras,
-              distances => \%idA__idB_distance,
+              distances => $idA__idB_distance,
              };
 
     
    } else {			# construct from .fasta string
 
-
-    
       # calculate and store distances (N choose 2 of them)
-      my %idA__idB_distance = (); # hash of hash refs
-      #    my @ids = sort { $a <=> $b } keys %$id_gobj;
-      #    my $n_nodes = scalar @ids;
+      my $idA__idB_distance = {}; # hash of hash refs
       my ($edge_count, $d_sum) = (0, 0);
       while (my ($i1, $id1) = each @ids) {
-         #   print STDERR "$i1 $id1 \n";
          my $g1 = $id_gobj->{$id1};
          for (my $i2 = $i1+1; $i2 < scalar @ids; $i2++) {
             my $id2 = $ids[$i2];
-            #    print STDERR "    $i2 $id2 \n";
             my $g2 = $id_gobj->{$id2};
-            my $d = $g1->distance($g2);
-            $d += 1e-6*($id2 + $id1); ##########
+            my ($d, $a, $h, $o) = $g1->distance($g2);
+     #       $d += 1e-6*($id2 + $id1); ##########
             $d_sum += $d;
             $edge_count++;
-            if (!exists $idA__idB_distance{$id1}) {
-               $idA__idB_distance{$id1} = {$id2 => $d};
-            } else {
-               $idA__idB_distance{$id1}->{$id2} = $d;
-            }
-            if (!exists $idA__idB_distance{$id2}) {
-               $idA__idB_distance{$id2} = {$id1 => $d};
-            } else {
-               $idA__idB_distance{$id2}->{$id1} = $d;
-            }
+	#    print "ddddd: $d\n";
+	#    printf("ffff %12.8f\n", $d);
+	    store_idAidBdistance($idA__idB_distance, $id1, $id2, $d);
          }
       }
 
       # for each genotype, find the nearest neighbors and construct node.
-      my $id_node = {};
+     # my $id_node = {};
       my $n_near = $args->{n_near} // BIG_NUMBER;
       $n_near = min($n_near, $n_nodes-1);
       my $n_extras = $args->{n_extras};
 
-      while ( my ($i, $id1) = each @ids) {
-         my $id2_dist = $idA__idB_distance{$id1};
-         my $count = 0;
-         my @neighbor_ids;
-         my $m = 'pq';
-         if ($m eq 'qsel') { # using quickselect algorithm (a bit faster)
-            @neighbor_ids = quickselect([keys %$id2_dist], $n_near, $id2_dist);
-            @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
-         } elsif ($m eq 'sort') { # sort the whole set of nodes (a bit slower)
-            @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
-            @neighbor_ids = @neighbor_ids[0 .. $n_near-1] if($n_near < scalar keys %$id2_dist);
-         } else {          # a bit faster than qsel for small $n_near 
-            my $pq = MyPriorityQueue->new($n_near, $id2_dist);
-            @neighbor_ids = @{ $pq->{queue} };
-         }
-         my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
-         get_extra_ids($id2_dist, \@neighbor_ids, \%neighborid_dist, $n_extras);
-
-         $id_node->{$id1} = GenotypeGraphNode->new( {
-                                                     id => $id1,
-                                                     genotype => $id_gobj->{$id1}, # genotype object
-                                                     #		    neighbor_ids => \@neighbor_ids,
-                                                     neighbor_id_distance => \%neighborid_dist,
-                                                    } );
-
-      }				# end node construction loop
+      my $id_node = construct_nodes($id_gobj, $idA__idB_distance, $n_near, $n_extras);
 
       return {
               nodes => $id_node,
               n_near => $n_near,
               n_extras => $n_extras,
-              distances => \%idA__idB_distance,
+              distances => $idA__idB_distance,
              };
    }				# end of
 
@@ -471,7 +388,7 @@ sub store_idAidBdistance{
    my $idA = shift;
    my $idB = shift;
    my $d = shift;
-
+# print "xaxaxaxax: $d \n";
    if (!exists $idA__idB_distance->{$idA}) {
       $idA__idB_distance->{$idA} = {$idB => $d};
    } else {
@@ -484,6 +401,44 @@ sub store_idAidBdistance{
    }
 
    return $idA__idB_distance;
+ }
+
+sub construct_nodes{ # construct the nodes, each with the appropriate neighbors
+  my $id_gobj = shift;
+  my $idAidBdist = shift;
+  my $n_near = shift;
+  my $n_extras = shift;
+
+    my $id_node = {};
+  # while ( my ($i, $id1) = each @$ids) {
+    for my $id1 (keys %$id_gobj){
+         my $id2_dist = $idAidBdist->{$id1};
+         my $count = 0;
+         my @neighbor_ids;
+         my $m = 'pq'; # controls which method is used to find the neighboring genotypes
+         if ($m eq 'qsel') { # using quickselect algorithm (a bit faster)
+            @neighbor_ids = quickselect([keys %$id2_dist], $n_near, $id2_dist);
+            @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } @neighbor_ids;
+         } elsif ($m eq 'sort') { # sort the whole set of nodes (a bit slower)
+            @neighbor_ids = sort { $id2_dist->{$a} <=> $id2_dist->{$b} } keys %$id2_dist;
+            @neighbor_ids = @neighbor_ids[0 .. $n_near-1] if($n_near < scalar keys %$id2_dist);
+         } else {          # a bit faster than qsel for small $n_near 
+            my $pq = MyPriorityQueue->new($n_near, $id2_dist);
+            @neighbor_ids = @{ $pq->{queue} };
+         }
+         my %neighborid_dist = map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
+         get_extra_ids($id2_dist, \@neighbor_ids, \%neighborid_dist, $n_extras);
+
+         $id_node->{$id1} = GenotypeGraphNode->new( {
+                                                     id => $id1,
+                                                     genotype => $id_gobj->{$id1}, # genotype object
+                                                     #		    neighbor_ids => \@neighbor_ids,
+                                                     neighbor_id_distance => \%neighborid_dist,
+                                                    } );
+
+      }				# end node construction loop
+
+  return $id_node;
 }
 
 ###########################################

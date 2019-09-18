@@ -49,10 +49,11 @@ sub as_string{
     sort { $a <=> $b }  # uncomment to sort by id
     keys %{$self->neighbor_id_distance()};
     #    @{$self->neighbor_ids()};	# sort by id
-  
+
   for my $idB (@nn_ids) {
     my $dist = $self->neighbor_id_distance->{$idB};
-    $str .= sprintf("%4d %5.4f  ", $idB, $dist);
+#    print "$idB  dist $dist \n";
+    $str .= sprintf("%4d %7.6f  ", $idB, $dist);
   }
   $str .= '   ' . join('', @{$self->genotype()->sequence()} ) if($show_sequence);
   return $str;
