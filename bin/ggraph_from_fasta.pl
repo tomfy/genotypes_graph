@@ -67,15 +67,16 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   my $t0 = gettimeofday();
   my $input_string;
-  if (-f ($input_filename = $input_filename_stem . '.graph')  and 0) { # .graph file exists - construct graph from it.
+  if ( -f ($input_filename = $input_filename_stem . '.graph') ) { # .graph file exists - construct graph from it.
     print STDERR "# Constructing graph from .graph file: $input_filename\n";
+    $output_distance_matrix = 0; # turn off writing distance_matrix file.
     $input_string =  file_to_string($input_filename);
     $genotype_graph = GenotypeGraph->new(
 					 { fasta_string => $fasta1_string,
 					   graph_string => $input_string}
 					);
 
-  } elsif (-f ($input_filename = $input_filename_stem . '.dmatrix') and 1 ) {
+  } elsif ( -f ($input_filename = $input_filename_stem . '.dmatrix') ) {
     print STDERR "# Constructing graph from .dmatrix file: $input_filename\n";
     $input_string =  file_to_string($input_filename);
  #   print "AAA: [$input_string]\n";
@@ -87,7 +88,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 					 }
 					);
 
-  } elsif (-f ($input_filename = $input_filename_stem . '.fasta')  ) {
+  } elsif ( -f ($input_filename = $input_filename_stem . '.fasta')  ) {
     print STDERR "# Constructing graph from .fasta file: $input_filename\n";
     my $fasta1_string = TomfyMisc::fasta2seqon1line(file_to_string($input_filename));
     # print "[$fasta_string]\n";
