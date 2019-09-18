@@ -59,7 +59,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $fasta1_filename = $input_filename_stem . '.fasta'; # get an array or hash of Genotype objs from this fasta file. 
   my $fasta1_string = (-f $fasta1_filename)?
     file_to_string($fasta1_filename)
-    :  print STDERR "Specified fasta file does not exit.\n",
+    :  print STDERR "Specified fasta file does not exist.\n",
     "Will construct graph from .graph or .dmatrix file\n",
     "No sequence info; no search possible.\n";;
 
@@ -78,7 +78,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   } elsif (-f ($input_filename = $input_filename_stem . '.dmatrix') and 1 ) {
     print STDERR "# Constructing graph from .dmatrix file: $input_filename\n";
     $input_string =  file_to_string($input_filename);
-    print "AAA: [$input_string]\n";
+ #   print "AAA: [$input_string]\n";
     $genotype_graph = GenotypeGraph->new(
 					 {  fasta_string => $fasta1_string,
 					    dmatrix_string => $input_string,
@@ -101,12 +101,12 @@ use TomfyMisc qw ' fasta2seqon1line ';
   }
   my $t1 = gettimeofday();
 
-die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
+#die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
   
- exit;
+# exit;
 
 # ###########  Search  ####################
-  if (0 and defined $other_fasta  and  -f $other_fasta) {
+  if (defined $other_fasta  and  -f $other_fasta) {
      my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
      my $other_id_gobjs = GenotypeGraph::fasta_string_to_gobjs($other_fasta_string);
 
@@ -146,7 +146,7 @@ sub file_to_string{
     open my $fhin, "<", $filename or die "open $filename for reading failed.\n";
     while (my $line = <$fhin>) {
       #   print STDERR $line;
-      next if($line =~ /^\s*#/);
+ #     next if($line =~ /^\s*#/);
       $input_string .= $line;
       #  print STDERR $fasta_as_read;
     }
