@@ -23,30 +23,43 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
 {                               ###########
 
-  my $n_nearest_to_keep =  5; # for each genotype make this many directed edges in graph, to the $n_nearest_to_keep closest other nodes.
-  my $input_filename = undef; # input fasta file name.
+  my $input_filename = undef;	# input fasta file name.
   my $other_fasta = undef;
+  my $error_prob = 0;
+
   my $output_distance_matrix = 1; # whether to output a distance matrix ( .dmatrix filename ending)
   my $output_graph = 1; # whether to output the graph (.graph filename ending0
   my $multiplier = 10000; # controls # significant digits. 10000 -> 0.6492361... is output as 6492
   my $show_sequence = 0; # if true, will output the sequence at the end of line.
+
+  my $n_nearest_to_keep =  5; # for each genotype make this many directed edges in graph, to the $n_nearest_to_keep closest other nodes
   my $n_extras = 0; # number of extra 'neighbors' to give each node, in addition to the $n_nearest_to_keep nearest nodes.
-  my $seed = 1234579;
+
+  my $do_search = 1; # default is to do search. -nosearch to skip the search.
+  my $n_independent_searches = 2;
   my $search_pq_size = 20;
-  my $error_prob = 0;
+  my $n_futile_rounds = 1;
+  my $seed = 1234579;
+
+
 
   GetOptions(
 	     'input_filename|fasta1|f1|stem=s' => \$input_filename,
 	     'fasta2|f2=s' => \$other_fasta,
-	     'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
+	     'error_prob=f' => \$error_prob,
+
 	     'distance_matrix_out|dmatrix!' => \$output_distance_matrix,
 	     'graph_out!' => \$output_graph,
 	     'multiplier=i' => \$multiplier,
 	     'sequence_out!' => \$show_sequence,
+
+	     'search!' => \$do_search,
+	     'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
 	     'extras=i' => \$n_extras,
-	     'seed=i' => \$seed,
+	     'starts=i' => \$n_independent_searches,
 	     'pq_size=i' => \$search_pq_size,
-	     'error_prob=f' => \$error_prob,
+	     'rounds=i' => \$n_futile_rounds,
+	     'seed=i' => \$seed, # rng seed - but results are not reproducible even with same seed (due to hashes?)
 	    );
 
   if ($seed > 0) {
@@ -59,7 +72,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $fasta1_filename = $input_filename_stem . '.fasta'; # get an array or hash of Genotype objs from this fasta file. 
   my $fasta1_string = (-f $fasta1_filename)?
     file_to_string($fasta1_filename)
-    :  print STDERR "Specified fasta file does not exist.\n",
+    :  print STDERR "# Specified fasta file does not exist.\n",
     "Will construct graph from .graph or .dmatrix file\n",
     "No sequence info; no search possible.\n";;
 
@@ -69,6 +82,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $input_string;
   if ( -f ($input_filename = $input_filename_stem . '.graph') ) { # .graph file exists - construct graph from it.
     print STDERR "# Constructing graph from .graph file: $input_filename\n";
+    print "# Constructing graph from .graph file: $input_filename\n";
     $output_distance_matrix = 0; # turn off writing distance_matrix file.
     $input_string =  file_to_string($input_filename);
     $genotype_graph = GenotypeGraph->new(
@@ -78,8 +92,10 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   } elsif ( -f ($input_filename = $input_filename_stem . '.dmatrix') ) {
     print STDERR "# Constructing graph from .dmatrix file: $input_filename\n";
+    print "# Constructing graph from .dmatrix file: $input_filename\n";
+
     $input_string =  file_to_string($input_filename);
- #   print "AAA: [$input_string]\n";
+    #   print "AAA: [$input_string]\n";
     $genotype_graph = GenotypeGraph->new(
 					 {  fasta_string => $fasta1_string,
 					    dmatrix_string => $input_string,
@@ -90,6 +106,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   } elsif ( -f ($input_filename = $input_filename_stem . '.fasta')  ) {
     print STDERR "# Constructing graph from .fasta file: $input_filename\n";
+    print "# Constructing graph from .fasta file: $input_filename\n";
     my $fasta1_string = TomfyMisc::fasta2seqon1line(file_to_string($input_filename));
     # print "[$fasta_string]\n";
     $genotype_graph = GenotypeGraph->new(
@@ -98,35 +115,46 @@ use TomfyMisc qw ' fasta2seqon1line ';
 					   n_extras => $n_extras,
 					 }
 					);
-
   }
   my $t1 = gettimeofday();
 
-#die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
-  
-# exit;
+  #die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
+  my $t1point5;
+  if ($do_search) {
+    # ###########  Search  ####################
+    if (defined $other_fasta  and  -f $other_fasta) {
+      my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
+      my $other_id_gobjs = GenotypeGraph::fasta_string_to_gobjs($other_fasta_string);
+      print STDERR "#  searching for matches to genotypes in file: $other_fasta.\n";
+      print "# searching for matches to genotypes in file: $other_fasta.\n";
+      print "# search parameters: n independent searches $n_independent_searches  pq size: $search_pq_size  n futile rounds: $n_futile_rounds \n";
+      #  for(my $i = 0; $i < 100; $i++){
+      #  for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
+      print "G ", scalar keys %$other_id_gobjs, "\n";
 
-# ###########  Search  ####################
-  if (defined $other_fasta  and  -f $other_fasta) {
-     my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
-     my $other_id_gobjs = GenotypeGraph::fasta_string_to_gobjs($other_fasta_string);
-
-     #  for(my $i = 0; $i < 100; $i++){
-     #  for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
-     for my $g_to_search_for (values %$other_id_gobjs) {
+      for my $g_to_search_for (values %$other_id_gobjs) {
         #  my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);
         $g_to_search_for->{id} += 100000;
         $g_to_search_for->add_noise($error_prob);
-        $genotype_graph->search_for_best_match($g_to_search_for, $search_pq_size);
-     }
-   }
-   my $t2 = gettimeofday();
-# ############## end of search  ##############
+        print "G  ", $genotype_graph->search_for_best_match($g_to_search_for, $n_independent_searches, $search_pq_size, $n_futile_rounds), "\n";
+      }
+	$t1point5 = gettimeofday();
+      for my $g_to_search_for (values %$other_id_gobjs) {
+        #  my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);
+	#      $g_to_search_for->{id} += 100000;
+	#      $g_to_search_for->add_noise($error_prob);
+        print "X  ", $genotype_graph->exhaustive_search($g_to_search_for, 4), "\n";
+      }
+    }
+  }
+  my $t2 = gettimeofday();
+  # ############## end of search  ##############
 
   if ($output_graph) {
-     my $graph_out_filename = $input_filename_stem . '.graph';
-     open my $fhout, ">", $graph_out_filename or die "Couldn't open $graph_out_filename for writing.\n";
-     print $fhout $genotype_graph->as_string($show_sequence);
+    my $graph_out_filename = $input_filename_stem . '.graph';
+    open my $fhout, ">", $graph_out_filename or die "Couldn't open $graph_out_filename for writing.\n";
+    print $fhout "n_near: $n_nearest_to_keep   n_extras: $n_extras \n";
+    print $fhout $genotype_graph->as_string($show_sequence);
     close $fhout;
   }
   if ($output_distance_matrix) {
@@ -136,7 +164,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
     close $fhout;
   }
   my $t3 = gettimeofday();
-  printf("times: construct: %12.3f  search: %12.3f  output: %12.3f  total: %12.3f\n", $t1-$t0, $t2-$t1, $t3-$t2, $t3-$t0);
+  printf("times: construct: %12.3f  gsearch: %12.3f  exsearch: %12.3f  output: %12.3f  total: %12.3f\n", $t1-$t0, $t2-$t1point5, $t1point5-$t1, $t3-$t2, $t3-$t0);
 }                               # end main
 
 
@@ -147,7 +175,7 @@ sub file_to_string{
     open my $fhin, "<", $filename or die "open $filename for reading failed.\n";
     while (my $line = <$fhin>) {
       #   print STDERR $line;
- #     next if($line =~ /^\s*#/);
+      #     next if($line =~ /^\s*#/);
       $input_string .= $line;
       #  print STDERR $fasta_as_read;
     }

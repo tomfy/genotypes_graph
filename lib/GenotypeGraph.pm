@@ -1,8 +1,8 @@
 package GenotypeGraph;
 use strict;
 use warnings;
-use Moose;
-#use Mouse;
+#use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
@@ -55,10 +55,12 @@ around BUILDARGS => sub {
   if (defined $args->{graph_string}) { # construct from .graph file
     # #### construct from .graph file, with info on nearest neighbors to each node. typical line:
     # #### 290  2  ((()26,()24)218,(()52,()22)176)290    176  0.383   218  0.42   274  0.482   354  0.501   52  0.502  328  0.757
-    $n_near = BIG_NUMBER;    # just keep everything in the .graph file
+
     my $idA__idB_distance = {}; # hash of hash refs
     my $id_node = {};
     my @graph_string_lines = split("\n", $args->{graph_string});
+    my $first_line = shift @graph_string_lines;
+    my ($n_near, $n_extras) = ($first_line =~ /n_near:\s+(\d+)\s+n_extras:\s+(\d+)/)? ($1, $2) : (BIG_NUMBER, 0);
     for my $line (@graph_string_lines) {
       next if($line =~ /^\s*#/);
       $line =~ s/^\s*(\S+)\s+(\S+)\s+(\S+)\s+//;
@@ -86,6 +88,8 @@ around BUILDARGS => sub {
     return {
 	    nodes => $id_node,
 	    distances => $idA__idB_distance,
+	    n_near => $n_near,
+	    n_extras => $n_extras,
 	   };
 
   } elsif (defined $args->{dmatrix_string}) { # construct from .dmatrix file
@@ -165,13 +169,36 @@ sub get_node_by_id{
   return $self->nodes()->{$id};
 }
 
+sub exhaustive_search{
+  my $self = shift;
+  my $gobj = shift;
+  my $pq_size_limit = shift // 10;
+
+  my $id_node = $self->nodes();
+
+  my $pq =  MyPriorityQueue->new($pq_size_limit);
+  while (my ($id, $node) = each %$id_node) {
+    my ($d, $a, $h, $o) = $gobj->distance($node->genotype());
+   $pq->size_limited_insert($id, $d);
+  }
+  my $search_out_string = $gobj->id() . "    ";
+ my @bests = $pq->peek_n_best(4);
+    for (@bests){
+      $search_out_string .= sprintf("%5s %7.5f   ", @$_);
+    }
+#  $search_out_string .= "\n";
+  return $search_out_string;
+}
+
 sub search_for_best_match{
   my $self = shift;
   my $gobj = shift;		#  Genotype objects to match
-  my $pq_size_limit = shift // 10;
   my $independent_starts = shift // 2;
-  print "#  ", $gobj->id(), "\n";
-  my %initid_bestmatchiddist = ();
+  my $pq_size_limit = shift // 10;
+  my $n_futile_rounds = shift // 1;
+
+  my $search_out_string = $gobj->id() . "    ";
+#  my %initid_bestmatchiddist = ();
   for (1..$independent_starts) {
     my $init_node_id = (keys %{$self->nodes()})[ int(rand(keys  %{$self->nodes()})) ];
 
@@ -180,7 +207,6 @@ sub search_for_best_match{
     my $pq_h = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
     my $id_status = {$init_node_id => 0}; # 0: unchecked, 1: checked, 2: checked and neighbors checked
 
-  
     my $count_d_calcs = 0;
     my $count_rounds = 0;
     my $count_futile_rounds = 0; # count the number of rounds since a better candidate has been found - use for deciding when to stop.
@@ -195,7 +221,7 @@ sub search_for_best_match{
 	# check these ids. i.e. get distances, insert in pq, and keep track of which have been checked,
 	# and which are in the pq after they have all been added (and some possibly bumped).
 
-	my ($d, $a_dist, $h_dist) = $gobj->distance($self->nodes()->{$an_id}->genotype());
+	my ($d, $a_dist, $h_dist, $o_dist) = $gobj->distance($self->nodes()->{$an_id}->genotype());
 	$count_d_calcs++;
 
 	my ($inserted, $bumped_id) = $pq->size_limited_insert($an_id, $d);
@@ -212,14 +238,14 @@ sub search_for_best_match{
 
 	$id_status->{$an_id} = 1; # this one has been checked!
 
-	print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  ",
-	  join(' ', map($_ // '-', $pq_a->peek_best())), " $a_dist  ",
-	  join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
+	#	print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  ",
+	#	  join(' ', map($_ // '-', $pq_a->peek_best())), " $a_dist  ",
+	#	  join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
       }
 
       $count_rounds++;
       $count_futile_rounds = (keys %$inserted_ids > 0)? 0 : $count_futile_rounds+1;
-      last if($count_futile_rounds > 1 and $count_rounds > 1);
+      last if($count_futile_rounds > $n_futile_rounds and $count_rounds > 1);
 
       for my $an_id (keys %$inserted_ids) { # get the neighbors of these (only those which have not been checked yet)
 	#  for my $a_neighbor_id (@{$self->nodes()->{$an_id}->neighbor_ids()}) {
@@ -228,7 +254,7 @@ sub search_for_best_match{
 	  $neighbor_ids->{$a_neighbor_id} = 1 if($id_status->{$a_neighbor_id} == 0); # skip any neighbors which have been checked already.
 	}
       }
-      for my $an_id (keys %$active_ids) { # these have been check and the set of their neighbors will need to be checked has been defined.
+      for my $an_id (keys %$active_ids) { # these have been checked and the set of their neighbors which will need to be checked has been defined.
 	$id_status->{$an_id} = 2;
       }
       $active_ids = $neighbor_ids; # neighbors in this round become active nodes for next round.
@@ -247,14 +273,20 @@ sub search_for_best_match{
     #   last if(!defined $an_id);
     #   print "$an_id  $dist    ";
     # }print "\n";
-    my ($best_id, $best_dist) = $pq->best();
-    print STDERR "$count_d_calcs  $best_id  $best_dist   ";
+    # output the best and next-best matches: 
+  #  my ($best_id, $best_dist) = $pq->best();
+    $search_out_string .= sprintf("%4d    ", $count_d_calcs);
     my ($nextbest_id, $nextbest_dist) = $pq->best();
-    print STDERR "$nextbest_id  $nextbest_dist   ";
-    $initid_bestmatchiddist{$gobj->id()} = $best_id . "_" . sprintf("%f6.4", $best_dist);
+  #  $search_out_string .= sprintf("%5s %7.5f      ",  $nextbest_id, $nextbest_dist);
+ #   $initid_bestmatchiddist{$gobj->id()} = $best_id . "_" . sprintf("%f6.4", $best_dist);
+    my @bests = $pq->peek_n_best(4);
+    for (@bests){
+      $search_out_string .= sprintf("%5s %8.5f   ", @$_);
+    }
   }
-  print STDERR "\n";
-  return \%initid_bestmatchiddist
+#  $search_out_string .= "\n";
+#  print $search_out_string;
+  return $search_out_string; # \%initid_bestmatchiddist
 }
 
 sub as_string{
@@ -306,7 +338,7 @@ sub get_extra_ids{
   }
 }
 
-sub quickselect{                # get the nearest $k ids.
+sub quickselect{		# get the nearest $k ids.
   my $id_list = shift;
   my $k = shift;	      # find this many.
   my $id_distance = shift;    # hash ref of all N-1 id:distance pairs.
@@ -424,11 +456,3 @@ sub construct_nodes{ # construct the nodes, each with the appropriate neighbors
 __PACKAGE__->meta->make_immutable;
 
 1;
-
-
-# __DATA__
-
-# __C__
-
-# void qselect(
-
