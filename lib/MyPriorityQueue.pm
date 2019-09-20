@@ -13,15 +13,15 @@ sub new {
   my $size_limit = shift // DEFAULT_SIZE_LIMIT;
   my $id_distance = shift // undef;
   my $self = bless {
-		queue => [], # payloads, in order from best [0] to worst [-1]
-		priority => {},	# keys: payloads, values: priorities
-		size_limit => $size_limit,
-	       }, $classname;
-$self->size_limited_hash_insert($id_distance) if(defined $id_distance);
-return $self;
+		    queue => [], # payloads, in order from best [0] to worst [-1]
+		    priority => {}, # keys: payloads, values: priorities
+		    size_limit => $size_limit,
+		   }, $classname;
+  $self->size_limited_hash_insert($id_distance) if(defined $id_distance);
+  return $self;
 }
 
-sub best {  # shift the 'best' (highest priority) element queue.
+sub best {	  # shift the 'best' (highest priority) element queue.
   my ($self) = @_;
   if (@{$self->{queue}} == 0) {
     return (undef, undef);
@@ -35,7 +35,7 @@ sub payloads{ # returns array ref with the payloads in order from best to worst
   return $self->{queue};
 }
 
-sub worst {  # pop the 'worst' (lowest priority) element off the queue.
+sub worst { # pop the 'worst' (lowest priority) element off the queue.
   my ($self) = @_;
   if (@{$self->{queue}} == 0) {
     return (undef, undef);
@@ -47,17 +47,27 @@ sub worst {  # pop the 'worst' (lowest priority) element off the queue.
 sub peek_best{
   my $self = shift;
   my ($best_payload, $best_priority) = (undef, undef);
-  if(@{$self->{queue}} > 0){
+  if (@{$self->{queue}} > 0) {
     $best_payload = $self->{queue}->[0];
     $best_priority = $self->{priority}->{$best_payload};
   }
   return ($best_payload, $best_priority);
 }
 
+sub peek_n_best{
+  my $self = shift;
+  my $n_to_get = shift;
+  if (scalar @{$self->{queue}} > $n_to_get) {
+    return map([$_, $self->{priority}->{$_}], @{$self->{queue}}[0..($n_to_get-1)]);
+  } else {
+    return map([$_, $self->{priority}->{$_}] ,@{$self->{queue}});
+  }
+}
+
 sub peek_worst{
   my $self = shift;
   my ($worst_payload, $worst_priority) = (undef, undef);
-  if(@{$self->{queue}} > 0){
+  if (@{$self->{queue}} > 0) {
     $worst_payload = $self->{queue}->[-1];
     $worst_priority = $self->{priority}->{$worst_payload};
   }
@@ -68,7 +78,7 @@ sub i_th_best{ # returns the payload & priority of the specified rank: (0: best,
   my $self = shift;
   my $i = shift;
   my ($payload, $priority) = (undef, undef);
-  if($i >= 0  and  $i < @{$self->{queue}} ){
+  if ($i >= 0  and  $i < @{$self->{queue}} ) {
     $payload = $self->{queue}->[$i];
     $priority = $self->{priority}->{$payload};
   }
@@ -115,14 +125,14 @@ sub size_limited_insert{
   # if payload is not inserted returns (0, undef);
   # if payload is inserted returns (1, p) if payload p is bumped from queue, (1, undef) if no payload is bumped.
   my ($self, $payload, $priority) = @_;
-  if( @{$self->{queue}} == $self->{size_limit} ){ # at limit
-    if($priority < $self->{priority}->{$self->{queue}->[-1]}) {
+  if ( @{$self->{queue}} == $self->{size_limit} ) { # at limit
+    if ($priority < $self->{priority}->{$self->{queue}->[-1]}) {
       $self->insert($payload, $priority);
       return (1, $self->worst()); #  pop worst.
-    }else{ # at limit and not better than worst, so do not insert
+    } else {	# at limit and not better than worst, so do not insert
       return (0, undef);
     }
-  }else{ # not at limit - plain insert
+  } else {			# not at limit - plain insert
     $self->insert($payload, $priority);
     return (1, undef);
   }
