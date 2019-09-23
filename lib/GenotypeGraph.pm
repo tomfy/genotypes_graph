@@ -1,8 +1,8 @@
 package GenotypeGraph;
 use strict;
 use warnings;
-#use Moose;
-use Mouse;
+use Moose;
+#use Mouse;
 use namespace::autoclean;
 use Carp;
 use List::Util qw ( min max sum );
@@ -172,7 +172,7 @@ sub get_node_by_id{
 sub exhaustive_search{
   my $self = shift;
   my $gobj = shift;
-  my $pq_size_limit = shift // 10;
+  my $pq_size_limit = shift // 5;
 
   my $id_node = $self->nodes();
 
@@ -182,7 +182,7 @@ sub exhaustive_search{
    $pq->size_limited_insert($id, $d);
   }
   my $search_out_string = $gobj->id() . "    ";
- my @bests = $pq->peek_n_best(4);
+ my @bests = $pq->peek_n_best(5);
     for (@bests){
       $search_out_string .= sprintf("%5s %7.5f   ", @$_);
     }
@@ -418,7 +418,7 @@ sub store_idAidBdistance{
 sub construct_nodes{ # construct the nodes, each with the appropriate neighbors
   my $id_gobj = shift;
   my $idAidBdist = shift;
-  my $n_near = min(shift, scalar %$id_gobj - 1);
+  my $n_near = min(shift, (scalar keys %$id_gobj) - 1);
   my $n_extras = shift;
 
   my $id_node = {};

@@ -119,7 +119,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $t1 = gettimeofday();
 
   #die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
-  my $t1point5;
+  my $t1point5 = undef;
   if ($do_search) {
     # ###########  Search  ####################
     if (defined $other_fasta  and  -f $other_fasta) {
@@ -145,6 +145,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	#      $g_to_search_for->add_noise($error_prob);
         print "X  ", $genotype_graph->exhaustive_search($g_to_search_for, 4), "\n";
       }
+    }else{
+       warn "Search requested but no file of sequences to search for specified or file doesn't exist.\n";
     }
   }
   my $t2 = gettimeofday();
@@ -156,15 +158,20 @@ use TomfyMisc qw ' fasta2seqon1line ';
     print $fhout "n_near: $n_nearest_to_keep   n_extras: $n_extras \n";
     print $fhout $genotype_graph->as_string($show_sequence);
     close $fhout;
-  }
+ }
   if ($output_distance_matrix) {
-    my $distance_out_filename = $input_filename_stem . '.dmatrix';
-    open my $fhout, ">", $distance_out_filename or die "Couldn't open $distance_out_filename for writing.\n";
-    print $fhout $genotype_graph->distance_matrix_as_string($multiplier);
-    close $fhout;
+     my $distance_out_filename = $input_filename_stem . '.dmatrix';
+     open my $fhout, ">", $distance_out_filename or die "Couldn't open $distance_out_filename for writing.\n";
+     print $fhout $genotype_graph->distance_matrix_as_string($multiplier);
+     close $fhout;
   }
   my $t3 = gettimeofday();
-  printf("times: construct: %12.3f  gsearch: %12.3f  exsearch: %12.3f  output: %12.3f  total: %12.3f\n", $t1-$t0, $t2-$t1point5, $t1point5-$t1, $t3-$t2, $t3-$t0);
+  my ($tex, $tgr) = (-1, -1);
+  if (defined $t1point5) {
+     $tex = $t1point5 - $t1;
+     $tgr = $t2 - $t1point5;
+  }
+  printf("times: construct: %12.3f  gsearch: %12.3f  exsearch: %12.3f  output: %12.3f  total: %12.3f\n", $t1-$t0, $tgr, $tex, $t3-$t2, $t3-$t0);
 }                               # end main
 
 
