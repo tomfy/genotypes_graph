@@ -32,7 +32,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $multiplier = 10000; # controls # significant digits. 10000 -> 0.6492361... is output as 6492
   my $show_sequence = 0; # if true, will output the sequence at the end of line.
 
-  my $n_nearest_to_keep =  5; # for each genotype make this many directed edges in graph, to the $n_nearest_to_keep closest other nodes
+  my $n_nearest_to_keep =  10; # for each genotype make this many directed edges in graph, to the $n_nearest_to_keep closest other nodes
+  my $n_nearest_for_search = 5;
   my $n_extras = 0; # number of extra 'neighbors' to give each node, in addition to the $n_nearest_to_keep nearest nodes.
 
   my $do_search = 1; # default is to do search. -nosearch to skip the search.
@@ -54,7 +55,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'sequence_out!' => \$show_sequence,
 
 	     'search!' => \$do_search,
-	     'nearest=i' => \$n_nearest_to_keep, # e.g. '*.newick'
+	     'keep=i' => \$n_nearest_to_keep, # e.g. '*.newick'
+	     'neighbors|nearest=i' => \$n_nearest_for_search,
 	     'extras=i' => \$n_extras,
 	     'starts=i' => \$n_independent_searches,
 	     'pq_size=i' => \$search_pq_size,
@@ -99,7 +101,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
     $genotype_graph = GenotypeGraph->new(
 					 {  fasta_string => $fasta1_string,
 					    dmatrix_string => $input_string,
-					    n_near => $n_nearest_to_keep,
+					    n_keep => $n_nearest_to_keep,
+					    n_near => $n_nearest_for_search,
 					    n_extras => $n_extras,
 					 }
 					);
@@ -111,13 +114,14 @@ use TomfyMisc qw ' fasta2seqon1line ';
     # print "[$fasta_string]\n";
     $genotype_graph = GenotypeGraph->new(
 					 { fasta_string => $fasta1_string,
-					   n_near => $n_nearest_to_keep,
+					   n_keep => $n_nearest_to_keep,
+					   n_near => $n_nearest_for_search,
 					   n_extras => $n_extras,
 					 }
 					);
   }
   my $t1 = gettimeofday();
-
+  printf( STDERR "Done constructing graph. Time to construct: %10.3g\n", $t1-$t0);
   #die "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\n";
   my $t1point5 = undef;
   if ($do_search) {
@@ -138,7 +142,9 @@ use TomfyMisc qw ' fasta2seqon1line ';
         $g_to_search_for->add_noise($error_prob);
         print "G  ", $genotype_graph->search_for_best_match($g_to_search_for, $n_independent_searches, $search_pq_size, $n_futile_rounds), "\n";
       }
-	$t1point5 = gettimeofday();
+      $t1point5 = gettimeofday();
+printf( STDERR "Done searching graph. Time to conduct graph search: %10.3g\n", $t1point5-$t1);
+      
       for my $g_to_search_for (values %$other_id_gobjs) {
         #  my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);
 	#      $g_to_search_for->{id} += 100000;
@@ -150,6 +156,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
     }
   }
   my $t2 = gettimeofday();
+  printf( STDERR "Done searching exhaustively. Time to conduct exhaustive search: %10.3g\n", $t2-$t1point5); 
   # ############## end of search  ##############
 
   if ($output_graph) {
@@ -168,8 +175,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $t3 = gettimeofday();
   my ($tex, $tgr) = (-1, -1);
   if (defined $t1point5) {
-     $tex = $t1point5 - $t1;
-     $tgr = $t2 - $t1point5;
+     $tgr = $t1point5 - $t1;
+     $tex = $t2 - $t1point5;
   }
   printf("times: construct: %12.3f  gsearch: %12.3f  exsearch: %12.3f  output: %12.3f  total: %12.3f\n", $t1-$t0, $tgr, $tex, $t3-$t2, $t3-$t0);
 }                               # end main

@@ -54,7 +54,7 @@ sub peek_best{
   return ($best_payload, $best_priority);
 }
 
-sub peek_n_best{
+sub peek_n_best{ # get the n best; return a list of array refs: [payload, priority]
   my $self = shift;
   my $n_to_get = shift;
   if (scalar @{$self->{queue}} > $n_to_get) {
