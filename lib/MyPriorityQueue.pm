@@ -85,6 +85,12 @@ sub i_th_best{ # returns the payload & priority of the specified rank: (0: best,
   return ($payload, $priority);
 }
 
+sub priority{ # return the priority corresponding to a payload
+  my $self = shift;
+  my $payload = shift;
+  return $self->{priority}->{$payload} // undef;
+}
+
 sub set_size_limit{
   my $self = shift;
   $self->{size_limit} = shift;
