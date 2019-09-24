@@ -134,7 +134,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
       print "# search parameters: n independent searches $n_independent_searches  pq size: $search_pq_size  n futile rounds: $n_futile_rounds \n";
       #  for(my $i = 0; $i < 100; $i++){
       #  for my $genotypegraph_node_to_clone (values %{$genotype_graph->nodes()}){ # -> genotype();
-      print "G ", scalar keys %$other_id_gobjs, "\n";
+      print "# G ", scalar keys %$other_id_gobjs, "\n";
 
       for my $g_to_search_for (values %$other_id_gobjs) {
         #  my $g_to_search_for = $genotypegraph_node_to_clone->genotype()->clone(id => $genotypegraph_node_to_clone->id() + 1000000);

@@ -167,11 +167,11 @@ around BUILDARGS => sub {
 	  my $id2 = $ids[$i2];
 	  my $g2 = $id_gobj->{$id2};
 	  my ($d, $a, $h, $o) = $g1->distance($g2);
-	  print STDERR "$id1  $id2  $d  \n";
+#	  print STDERR "$id1  $id2  $d  \n";
 	  $idA_idBdPQ{$id1}->size_limited_insert($id2, $d); # store in pq, keeping only top $n_keep distances
 	  $idA_idBdPQ{$id2}->size_limited_insert($id1, $d); # store in pq, keeping only top $n_keep distances
 	  #	  print STDERR "AAA n best: ", $idA_idBdPQ{$id1}->peek_n_best(4), "\n";
-	  print STDERR "after sli\n";
+#	  print STDERR "after sli\n";
 	}
       }
 
@@ -351,15 +351,16 @@ sub distance_matrix_as_string{
     #  my $id2_dist = $self->distances()->{$id1}; # a MyPriorityQueue  # $idA__idB_distance->{$id1};
       my @n_bests = $self->distances()->{$id1}->peek_n_best($self->n_keep());
       my %id2_dist = map(@$_ , @n_bests);
-      print STDERR "AAAA: ", join('   ',  map(@$_ , @n_bests)), "\n";
+#      print STDERR "AAAA: ", join('   ',  map(@$_ , @n_bests)), "\n";
 
   #    my @id2s = sort { $a <=> $b } keys %id2_dist;
  #     print STDERR "BBBB: ", join(' ', keys %id2_dist), "     ", join(' ', @id2s), "\n";
  #     print STDERR "ASDFASDFASDF: ", join(" ", @id2s), "\n";
       $d_matrix_string .= sprintf("%2d  ", $id1); # , join(" ", map (int($multiplier*$id2_dist{$_} + 0.5), @id2s) ) );
       for (my $j=$i+1; $j < scalar @ids; $j++) {
-         my $id2 = $ids[$j];
-         $d_matrix_string .= (defined $id2_dist{$id2})? sprintf("%d ", int($multiplier*$id2_dist{$id2})) : '---- ';
+	my $id2 = $ids[$j];
+	my $d = $id2_dist{$id2} // $self->distances()->{$id2}->priority($id1);
+         $d_matrix_string .= (defined $d)? sprintf("%d ", int($multiplier*$d + 0.5)) : '---- ';
       }
       $d_matrix_string .= "\n";
    }
@@ -472,7 +473,7 @@ sub construct_nodes{ # construct the nodes, each with the appropriate neighbors
   my $id_node = {};
   for my $id1 (keys %$id_gobj) {
     my $id2_dist = $idAidBdist->{$id1};
-    print STDERR "ref id2_dist:  [", ref $id2_dist, "]\n";
+#    print STDERR "ref id2_dist:  [", ref $id2_dist, "]\n";
     if (ref $id2_dist eq 'HASH') {
       my $count = 0;
       my @neighbor_ids;
@@ -498,7 +499,7 @@ sub construct_nodes{ # construct the nodes, each with the appropriate neighbors
 						 } );
     } elsif (ref $id2_dist eq 'MyPriorityQueue') {
       my @n_best = map( ($_->[0], $_->[1]), $id2_dist->peek_n_best($n_near));
-      print STDERR "n best:  ", join('  ', @n_best), "\n";
+#      print STDERR "n best:  ", join('  ', @n_best), "\n";
       my %neighborid_dist = @n_best;
       #map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
       get_extra_ids($id2_dist, \%neighborid_dist, $n_extras);
