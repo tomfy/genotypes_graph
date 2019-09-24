@@ -340,21 +340,30 @@ sub as_string{
 }
 
 sub distance_matrix_as_string{
-  my $self = shift;
-  my $multiplier = shift;
-  my $idA__idB_distance = $self->distances();
-  my @ids = sort {$a <=> $b} keys %$idA__idB_distance;
-  my $n_nodes = scalar @ids;
-  my $d_matrix_string = '# ' . $multiplier ."\n";
-  $d_matrix_string .= join(" ", @ids) . "\n";
-  while ( my ($i, $id1) = each @ids) {
-    my $id2_dist = $idA__idB_distance->{$id1};
-    # xxxxxxxxxx
-    {$self->distances()->{$id1}->peek_n_best($self->n_keep())}
-    my @id2s = sort { $a <=> $b } keys %$id2_dist;
-    $d_matrix_string .= sprintf("%2d  %s\n", $id1, join(" ", map (int($multiplier*$id2_dist->{$_} + 0.5), @id2s[$i..$n_nodes-2]) ) );
-  }
-  return $d_matrix_string;
+   my $self = shift;
+   my $multiplier = shift;
+   #  my $idA__idB_distance = $self->distances();
+   my @ids = sort {$a <=> $b} keys %{$self->distances()}; # idA__idB_distance;
+   my $n_nodes = scalar @ids;
+   my $d_matrix_string = '# ' . $multiplier ."\n";
+   $d_matrix_string .= join(" ", @ids) . "\n";
+   while ( my ($i, $id1) = each @ids) {
+    #  my $id2_dist = $self->distances()->{$id1}; # a MyPriorityQueue  # $idA__idB_distance->{$id1};
+      my @n_bests = $self->distances()->{$id1}->peek_n_best($self->n_keep());
+      my %id2_dist = map(@$_ , @n_bests);
+      print STDERR "AAAA: ", join('   ',  map(@$_ , @n_bests)), "\n";
+
+  #    my @id2s = sort { $a <=> $b } keys %id2_dist;
+ #     print STDERR "BBBB: ", join(' ', keys %id2_dist), "     ", join(' ', @id2s), "\n";
+ #     print STDERR "ASDFASDFASDF: ", join(" ", @id2s), "\n";
+      $d_matrix_string .= sprintf("%2d  ", $id1); # , join(" ", map (int($multiplier*$id2_dist{$_} + 0.5), @id2s) ) );
+      for (my $j=$i+1; $j < scalar @ids; $j++) {
+         my $id2 = $ids[$j];
+         $d_matrix_string .= (defined $id2_dist{$id2})? sprintf("%d ", int($multiplier*$id2_dist{$id2})) : '---- ';
+      }
+      $d_matrix_string .= "\n";
+   }
+   return $d_matrix_string;
 }
 
 ####   ordinary subroutines  ###

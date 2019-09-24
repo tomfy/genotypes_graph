@@ -32,7 +32,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $multiplier = 10000; # controls # significant digits. 10000 -> 0.6492361... is output as 6492
   my $show_sequence = 0; # if true, will output the sequence at the end of line.
 
-  my $n_nearest_to_keep =  10; # for each genotype make this many directed edges in graph, to the $n_nearest_to_keep closest other nodes
+  my $n_nearest_to_keep =  8; # for each genotype make this many directed edges in graph, to the $n_nearest_to_keep closest other nodes
   my $n_nearest_for_search = 5;
   my $n_extras = 0; # number of extra 'neighbors' to give each node, in addition to the $n_nearest_to_keep nearest nodes.
 
@@ -152,7 +152,7 @@ printf( STDERR "Done searching graph. Time to conduct graph search: %10.3g\n", $
         print "X  ", $genotype_graph->exhaustive_search($g_to_search_for, 4), "\n";
       }
     }else{
-       warn "Search requested but no file of sequences to search for specified or file doesn't exist.\n";
+       die "Search requested but no file of sequences to search for specified or file doesn't exist.\n";
     }
   }
   my $t2 = gettimeofday();
