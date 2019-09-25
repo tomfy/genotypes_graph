@@ -1,6 +1,6 @@
 package Genotype;
-use Moose;
-#use Mouse;
+#use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
