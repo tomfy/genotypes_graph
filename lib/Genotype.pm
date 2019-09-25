@@ -76,10 +76,15 @@ sub distance{ # calculate distance between this genotype obj. and another
    my $this_gt = $self->sequence();	      # string
    my $other_gt = $other_genotype->sequence(); # string
 
-   if (1) {		       # use inline::C function: (much faster)
+   my $Dcalc = 1;
+
+   if ($Dcalc == 1) {		       # use inline::C function: (much faster)
       my ($d, $agmr, $hgmr, $ogmr);
       distances_C(0, BIG_NUMBER, $this_gt, $other_gt, $d, $agmr, $hgmr, $ogmr);
 #      printf("%10.6f %10.6f, %10.6f, %10.6f \n", $d, $agmr, $hgmr, $ogmr);
+      return ($d, $agmr, $hgmr, $ogmr);
+    }elsif($Dcalc == 2){
+      my ($d, $agmr, $hgmr, $ogmr) = (distance_C($this_gt, $other_gt), 5, 5, 5);
       return ($d, $agmr, $hgmr, $ogmr);
    } else {			# pure perl. much slower.
       my $distance = 0;
@@ -268,7 +273,7 @@ count++;
 
 i++;
 }
-  printf("%d  %d \n", dist, count);
+//  printf("%d  %d \n", dist, count);
 if (count > 0) {
    //  printf("%g\n", 1.0*dist/count);
    return 1.0*dist/count;
@@ -284,7 +289,7 @@ double distances_C(int start, int n_homozyg, char* str1, char* str2, SV* dist, S
        int i = start;
      char c1;
      char c2;
-
+    
        int count_02 = 0; // 0<->2 (both directions)
          int count_0022 = 0; // 0<->0 or 2<->2
            int count_11 = 0; // 1<->1
@@ -324,7 +329,8 @@ double distances_C(int start, int n_homozyg, char* str1, char* str2, SV* dist, S
                               }
             }
             i++;
-            if((count_0022 + count_02) >= n_homozyg){ break; }  // stop after len homozygous-only pairs
+//	     printf("%d %d %d \n", start, n_homozyg, count_0022 + count_02);
+            if((count_0022 + count_02) >= n_homozyg){ break; }  // stop after n_homozyg homozygous-only pairs
          } // end of while
 
          double homozyg_denom = count_0022 + count_02; // both genotypes of pair homozygous
