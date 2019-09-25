@@ -59,7 +59,7 @@ around BUILDARGS => sub {
   my $n_extras = $args->{n_extras} // 0;
   my $n_nodes = scalar @ids;
 
-  if (defined $args->{graph_string}) { # construct from .graph file
+  if (defined $args->{graph_string}) { # construct from .graph file    ### FROM GRAPH ###
     # #### construct from .graph file, with info on nearest neighbors to each node. typical line:
     # #### 290  2  ((()26,()24)218,(()52,()22)176)290    176  0.383   218  0.42   274  0.482   354  0.501   52  0.502  328  0.757
 
@@ -100,7 +100,7 @@ around BUILDARGS => sub {
 	    n_extras => $n_extras,
 	   };
 
-  } elsif (defined $args->{dmatrix_string}) { # construct from .dmatrix file
+  } elsif (defined $args->{dmatrix_string}) { # construct from .dmatrix file  ### FROM DISTANCE MATRIX ###
     # #### construct graph from .dmatrix file
     # #### which has all  N choose 2 distances
 
@@ -115,9 +115,11 @@ around BUILDARGS => sub {
       my @distances = split(/\s+/, $line); # except that the first col is id
       my $id1 = shift @distances;
       while (my($j, $d) = each @distances) {
-	$d /= (defined $multiplier)? $multiplier : 1;
-	my $id2 = $dm_ids[$j + $i + 1];
-	store_idAidBdistance($idA__idB_distance, $id1, $id2, $d);
+	if ($d ne '----') {
+	  $d /= (defined $multiplier)? $multiplier : 1;
+	  my $id2 = $dm_ids[$j + $i + 1];
+	  store_idAidBdistance($idA__idB_distance, $id1, $id2, $d);
+	}
       }
     }
 
@@ -132,12 +134,12 @@ around BUILDARGS => sub {
 	   };
 
     
-  } else {		       # construct from .fasta string
+  } else {		       # construct from .fasta string    ### FROM FASTA ###
     # #### construct graph from .fasta file
     # #### with N equal-length sequences. Calculate all N choose 2 distances
      
     # calculate and store distances (N choose 2 of them)
-    if (0) {
+    if (0) { # store all
       my $idA__idB_distance = {}; # hash of hash refs
       while (my ($i1, $id1) = each @ids) {
 	my $g1 = $id_gobj->{$id1};
@@ -158,7 +160,7 @@ around BUILDARGS => sub {
 	      n_extras => $n_extras,
 	      distances => $idA__idB_distance,
 	     };
-    } else {
+    } else { # store $n_keep best in a PQ
       # my $idA__idB_distance = {}; # hash ref of pqs
       my %idA_idBdPQ = map(($_ => MyPriorityQueue->new($n_keep)) , @ids);
       while (my ($i1, $id1) = each @ids) {
@@ -264,14 +266,17 @@ sub search_for_best_match{
 	$inserted_ids->{$an_id} = 1 if($inserted);
 	delete $inserted_ids->{$bumped_id} if(defined $bumped_id); # so if an id is inserted, then bumped, it will not be in this hash.
 
-	my ($inserted_a, $bumped_id_a) = $pq_a->size_limited_insert($an_id, $a_dist);
-	$inserted_ids_a->{$an_id} = 1 if($inserted_a);
-	delete $inserted_ids_a->{$bumped_id_a} if(defined $bumped_id_a); # so if an id is inserted, then bumped, it will not be in this hash.
+	if (0) { # pq's for the other kinds of distances - skip for now.
+	  my ($inserted_a, $bumped_id_a) = $pq_a->size_limited_insert($an_id, $a_dist);
+	  $inserted_ids_a->{$an_id} = 1 if($inserted_a);
+	  delete $inserted_ids_a->{$bumped_id_a} if(defined $bumped_id_a); # so if an id is inserted, then bumped, it will not be in this hash.
 
-	my ($inserted_h, $bumped_id_h) = $pq_h->size_limited_insert($an_id, $h_dist);
-	$inserted_ids_h->{$an_id} = 1 if($inserted_h);
-	delete $inserted_ids_h->{$bumped_id_h} if(defined $bumped_id_h); # so if an id is inserted, then bumped, it will not be in this hash.
+	  my ($inserted_h, $bumped_id_h) = $pq_h->size_limited_insert($an_id, $h_dist);
+	  $inserted_ids_h->{$an_id} = 1 if($inserted_h);
+	  delete $inserted_ids_h->{$bumped_id_h} if(defined $bumped_id_h); # so if an id is inserted, then bumped, it will not be in this hash.
+	}
 
+	
 	$id_status->{$an_id} = 1; # this one has been checked!
 
 	#	print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  ",
@@ -314,7 +319,7 @@ sub search_for_best_match{
     # output the best and next-best matches: 
     #  my ($best_id, $best_dist) = $pq->best();
     $search_out_string .= sprintf("%4d    ", $count_d_calcs);
-    my ($nextbest_id, $nextbest_dist) = $pq->best();
+ #   my ($nextbest_id, $nextbest_dist) = $pq->best();
     #  $search_out_string .= sprintf("%5s %7.5f      ",  $nextbest_id, $nextbest_dist);
     #   $initid_bestmatchiddist{$gobj->id()} = $best_id . "_" . sprintf("%f6.4", $best_dist);
     my @bests = $pq->peek_n_best(4);
@@ -370,22 +375,40 @@ sub distance_matrix_as_string{
 ####   ordinary subroutines  ###
 
 sub get_extra_ids{
-  my $id2_dist = shift;
-  #  my $near_ids = shift;
-  my $nearid_dist = shift;
-  my $n_extras = shift;
+  my $id2_dist = shift; # may be PQ
+  my $nearid_dist = shift; # the ids already found to be the nearest (not symmetrized yet), and dists (hash ref)
+    my $n_extras = shift;
   my $n_try = shift // 5;
-  for (1..$n_extras) {
-    for (1..$n_try) {
-      my $extra_id = (keys %$id2_dist)[int(rand keys %$id2_dist)];
-      #	(keys %$id2_dist)[0 - $_];
-      if (! exists $nearid_dist->{$extra_id}) {
-	#	push @$near_ids, $extra_id;
-	$nearid_dist->{$extra_id} = $id2_dist->{$extra_id};
-	last;
+  
+  if (ref $id2_dist eq 'HASH') {
+    #  my $near_ids = shift;
+  
+    for (1..$n_extras) {
+      for (1..$n_try) {
+	my $extra_id = (keys %$id2_dist)[int(rand keys %$id2_dist)];
+	#	(keys %$id2_dist)[0 - $_];
+	if (! exists $nearid_dist->{$extra_id}) {
+	  #	push @$near_ids, $extra_id;
+	  $nearid_dist->{$extra_id} = $id2_dist->{$extra_id};
+	  last;
+	}
       }
     }
-  }
+  } elsif (ref $id2_dist eq 'MyPriorityQueue') {
+ for (1..$n_extras) {
+   for (1..$n_try) {
+     my ($extra_id, $extra_d) = $id2_dist->i_th_best(int(rand $id2_dist->get_size()));
+ #    print STDERR "xid xd: $extra_id  $extra_d \n";
+	#	(keys %$id2_dist)[0 - $_];
+	if (! exists $nearid_dist->{$extra_id}) {
+	  #	push @$near_ids, $extra_id;
+	  $nearid_dist->{$extra_id} = $id2_dist->priority($extra_id); # add to the set of ids to be considered neighbors 
+	  last;
+	}
+      }
+    }
+}
+ #print STDERR "XXX: ", join("  ", map($_ . " " . $nearid_dist->{$_}, keys %$nearid_dist)), "\n";
 }
 
 sub quickselect{		# get the nearest $k ids.
@@ -499,11 +522,13 @@ sub construct_nodes{ # construct the nodes, each with the appropriate neighbors
 						 } );
     } elsif (ref $id2_dist eq 'MyPriorityQueue') {
       my @n_best = map( ($_->[0], $_->[1]), $id2_dist->peek_n_best($n_near));
-#      print STDERR "n best:  ", join('  ', @n_best), "\n";
-      my %neighborid_dist = @n_best;
+  #     print STDERR "#### id1:  $id1 \n";
+  #    print STDERR "n best:  ", join('  ', @n_best), "\n";
+      my %neighborid_dist = @n_best; # id:dist hash
       #map(($_ => $id2_dist->{$_}), @neighbor_ids); # hash w ids, distances for just nearest $n_near
-      get_extra_ids($id2_dist, \%neighborid_dist, $n_extras);
 
+      get_extra_ids($id2_dist, \%neighborid_dist, $n_extras);
+   #   print STDERR "\n";
       $id_node->{$id1} = GenotypeGraphNode->new( {
 						  id => $id1,
 						  genotype => $id_gobj->{$id1}, # genotype object
