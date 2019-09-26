@@ -234,21 +234,25 @@ sub search_for_best_match{
   my $independent_starts = shift // 2;
   my $pq_size_limit = shift // 10;
   my $n_futile_rounds = shift // 1;
-
+  my $Ninit =  1;
+  
   my $search_out_string = $gobj->id() . "    ";
   #  my %initid_bestmatchiddist = ();
   for (1..$independent_starts) {
     my $init_node_id = (keys %{$self->nodes()})[ int(rand(keys  %{$self->nodes()})) ];
-
+     my @init_node_ids = ();
+    for (1..$Ninit) {
+      push @init_node_ids, (keys %{$self->nodes()})[ int(rand(keys  %{$self->nodes()})) ];
+    }
     my $pq = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
-    my $pq_a = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
-    my $pq_h = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
-    my $id_status = {$init_node_id => 0}; # 0: unchecked, 1: checked, 2: checked and neighbors checked
+#    my $pq_a = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
+#    my $pq_h = MyPriorityQueue->new($pq_size_limit); # for storing the best-so-far nodes;
+    my %id_status = map(($_ => 0), @init_node_ids); # 0: unchecked, 1: checked, 2: checked and neighbors checked
 
     my $count_d_calcs = 0;
     my $count_rounds = 0;
     my $count_futile_rounds = 0; # count the number of rounds since a better candidate has been found - use for deciding when to stop.
-    my $active_ids = {$init_node_id => 1}; # neighbors of these need to be checked.
+    my $active_ids = {map(($_ => 1), @init_node_ids)}; # neighbors of these need to be checked.
     while (1) {
       my $neighbor_ids = {};
       my $inserted_ids = {};
@@ -266,20 +270,20 @@ sub search_for_best_match{
 	$inserted_ids->{$an_id} = 1 if($inserted);
 	delete $inserted_ids->{$bumped_id} if(defined $bumped_id); # so if an id is inserted, then bumped, it will not be in this hash.
 
-	if (0) { # pq's for the other kinds of distances - skip for now.
-	  my ($inserted_a, $bumped_id_a) = $pq_a->size_limited_insert($an_id, $a_dist);
-	  $inserted_ids_a->{$an_id} = 1 if($inserted_a);
-	  delete $inserted_ids_a->{$bumped_id_a} if(defined $bumped_id_a); # so if an id is inserted, then bumped, it will not be in this hash.
+	# if (0) { # pq's for the other kinds of distances - skip for now.
+	#   my ($inserted_a, $bumped_id_a) = $pq_a->size_limited_insert($an_id, $a_dist);
+	#   $inserted_ids_a->{$an_id} = 1 if($inserted_a);
+	#   delete $inserted_ids_a->{$bumped_id_a} if(defined $bumped_id_a); # so if an id is inserted, then bumped, it will not be in this hash.
 
-	  my ($inserted_h, $bumped_id_h) = $pq_h->size_limited_insert($an_id, $h_dist);
-	  $inserted_ids_h->{$an_id} = 1 if($inserted_h);
-	  delete $inserted_ids_h->{$bumped_id_h} if(defined $bumped_id_h); # so if an id is inserted, then bumped, it will not be in this hash.
-	}
+	#   my ($inserted_h, $bumped_id_h) = $pq_h->size_limited_insert($an_id, $h_dist);
+	#   $inserted_ids_h->{$an_id} = 1 if($inserted_h);
+	#   delete $inserted_ids_h->{$bumped_id_h} if(defined $bumped_id_h); # so if an id is inserted, then bumped, it will not be in this hash.
+	# }
 
 	
-	$id_status->{$an_id} = 1; # this one has been checked!
+	$id_status{$an_id} = 1; # this one has been checked!
 
-	#	print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  ",
+		print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  \n"; #,
 	#	  join(' ', map($_ // '-', $pq_a->peek_best())), " $a_dist  ",
 	#	  join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
       }
@@ -293,12 +297,12 @@ sub search_for_best_match{
 
 	# just get top few here
 	for my $a_neighbor_id (keys %{$self->nodes()->{$an_id}->neighbor_id_distance()}) {
-	  $id_status->{$a_neighbor_id} //= 0;
-	  $neighbor_ids->{$a_neighbor_id} = 1 if($id_status->{$a_neighbor_id} == 0); # skip any neighbors which have been checked already.
+	  $id_status{$a_neighbor_id} //= 0;
+	  $neighbor_ids->{$a_neighbor_id} = 1 if($id_status{$a_neighbor_id} == 0); # skip any neighbors which have been checked already.
 	}
       }
       for my $an_id (keys %$active_ids) { # these have been checked and the set of their neighbors which will need to be checked has been defined.
-	$id_status->{$an_id} = 2;
+	$id_status{$an_id} = 2;
       }
       $active_ids = $neighbor_ids; # neighbors in this round become active nodes for next round.
 
