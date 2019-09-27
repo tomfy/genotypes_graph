@@ -115,7 +115,9 @@ around BUILDARGS => sub {
       my @distances = split(/\s+/, $line); # except that the first col is id
       my $id1 = shift @distances;
       while (my($j, $d) = each @distances) {
-	if ($d ne '----') {
+	if ($d =~ /\-+/){
+	  # 
+	}else {
 	  $d /= (defined $multiplier)? $multiplier : 1;
 	  my $id2 = $dm_ids[$j + $i + 1];
 	  store_idAidBdistance($idA__idB_distance, $id1, $id2, $d);
@@ -283,7 +285,7 @@ sub search_for_best_match{
 	
 	$id_status{$an_id} = 1; # this one has been checked!
 
-		print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  \n"; #,
+#		print $gobj->id(), "  $count_rounds  $count_d_calcs  ", join(' ', map($_ // '-', $pq->peek_best())), " $d  \n"; #,
 	#	  join(' ', map($_ // '-', $pq_a->peek_best())), " $a_dist  ",
 	#	  join(' ', map($_ // '-', $pq_h->peek_best())), " $h_dist\n";
       }
@@ -369,7 +371,7 @@ sub distance_matrix_as_string{
       for (my $j=$i+1; $j < scalar @ids; $j++) {
 	my $id2 = $ids[$j];
 	my $d = $id2_dist{$id2} // $self->distances()->{$id2}->priority($id1);
-         $d_matrix_string .= (defined $d)? sprintf("%d ", int($multiplier*$d + 0.5)) : '---- ';
+         $d_matrix_string .= (defined $d)? sprintf("%d ", int($multiplier*$d + 0.5)) : '- ';
       }
       $d_matrix_string .= "\n";
    }
