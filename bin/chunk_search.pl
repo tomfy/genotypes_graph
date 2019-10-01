@@ -18,15 +18,21 @@ BEGIN {     # this has to go in Begin block so happens at compile time
 }
 use lib $libdir;
 
-use GenotypeGraph;
-use GenotypeGraphNode;
+#use GenotypeGraph;
+#use GenotypeGraphNode;
 use Genotype;
+use ChunkSet;
 use Getopt::Long;
 use lib '/home/tomfy/Orthologger/lib/';
 use TomfyMisc qw ' fasta2seqon1line ';
 
 {                               ###########
 
+  # my @xs = (0..100);
+  # my $randxs = randomize_array(\@xs);
+  # print "randomized ints: ", join(' ', @$randxs), "\n";
+  # exit;
+  
   my $input_filename = undef;	# input fasta file name.
   my $other_fasta = undef;
   my $error_prob = 0;
@@ -208,6 +214,38 @@ sub fasta_string_to_hash{
   }
   return $id_seq;
 }
+
+sub scrambled_chunks{
+  my $sequence = shift;
+  my $chunk_size = shift;
+  my $indices = shift;	# array ref of indices: [13,2,45,5,17,6, ...] 
+
+  my @chunk_seqs = ();
+  my @chars = split('', $sequence);
+  while (scalar @$indices >= $chunk_size) {
+    my @chunk_indices = splice( @$indices, 0, $chunk_size);
+    my $chunk_sequence = join('', @chars[@chunk_indices]);
+    push @chunk_seqs, $chunk_sequence;
+  }
+  return \@chunk_seqs;
+}
+
+sub randomize_array{
+  my $xs = shift;
+  my $n_to_do = scalar @$xs;
+  my $jswap = -1; # where randomly chosen elem will be swapped to.
+  while($n_to_do > 1){
+    my $rand_index = int(rand($n_to_do));
+    my $tmp = $xs->[$jswap];
+    $xs->[$jswap] = $xs->[$rand_index];
+    $xs->[$rand_index] = $tmp;
+    $n_to_do--;
+    $jswap--;
+  }
+  return $xs;
+}
+
+
 
 # sub distance{ # calculate distance between this genotype obj. and another
 #    my $this_gt = shift;    # string
@@ -417,3 +455,4 @@ Inline_Stack_Done; */
   sv_setiv(n_mm, mismatch_count);
 
 }
+
