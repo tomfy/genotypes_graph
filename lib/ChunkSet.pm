@@ -45,8 +45,7 @@ sub BUILD{
       while ( my ($ich, $ch_indices) = each @chunk_spec_arrays) { # index, and array ref.
          my $ch_spec = $self->{chunk_specifiers}->[$ich]; # as a string
          my $chunk_seq = join('', @seq_chars[@$ch_indices]);
-         $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} //= [];
-         push @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} }, $seqid;
+	 push @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} //= []  }, $seqid;
       }
    }
 }
@@ -54,25 +53,17 @@ sub BUILD{
 sub get_chunk_match_counts{
    my $self = shift;
    my $sequence = shift;        # the sequence to match
-   #print "$sequence \n";
-   #print "n chunks:  ", scalar @{$self->chunk_specifiers()}, "\n";
+   my $id_matchcount = shift // {};
+
    my @seq_chars = split('', $sequence);
-   my %ids_matchcounts = ();
    while ( my ($ich, $ch_indices) = each @{$self->{chunk_spec_arrays}}) { # index, and array ref.
       my $ch_spec =  $self->{chunk_specifiers}->[$ich]; # as a string
-      #   print STDERR "ch spec: [$ch_spec] [", join(',', @$ch_indices), "]\n";
       my $chunk_seq = join('', @seq_chars[@$ch_indices]);
-      #    print "[$chunk_seq] \n";
-      my $matching_ids =
-        $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} // []; # array ref of ids matching sequence in this chunk.
-      for (@$matching_ids) {
-         $ids_matchcounts{$_} += 1;
+	for( @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} // [] } ){
+         $id_matchcount->{$_}++;
       }
 
-      #      $self->chunkspec__seq_ids()->{$ch_spec}->{$chunk_seq} //= [];
-      #      push @{ $self->chunkspec__seq_ids()->{$ch_spec}->{$chunk_seq} }, $seqid;
    }
-   return \%ids_matchcounts;
 }
 
 ###################
