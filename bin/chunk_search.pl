@@ -59,14 +59,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'fasta2|f2=s' => \$other_fasta,
 	     'error_prob=f' => \$error_prob,
 
-	     #    'search!' => \$do_search,
 	     'keep=i' => \$n_keep, 
-	     # 'neighbors|nearest=i' => \$n_nearest_for_search,
-	     # 'extras=i' => \$n_extras,
-	     # 'starts=i' => \$n_independent_searches,
-	     # 'pq_size=i' => \$search_pq_size,
-	     # 'rounds=i' => \$n_futile_rounds,
-	     # 'seed=i' => \$seed, # rng seed - but results are not reproducible even with same seed (due to hashes?)
 	     'exhaustive_search!' => \$do_exhaustive_search,
 	     'chunk_size=i' => \$chunk_size,
 	     'new!' => \$new,
@@ -213,10 +206,12 @@ use TomfyMisc qw ' fasta2seqon1line ';
     my @chuck_set_objects = ();
     my $indices = [0 .. $sequence_length - 1]; # not randomizing for now!
     push @chuck_set_objects, ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
+
     for (2..$n_chunk_sets) {
-      $indices = randomize_array([0 .. (scalar keys %$id_sequence) - 1]);
+      $indices = randomize_array([0 .. $sequence_length - 1]);
       push @chuck_set_objects, ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
     }
+
     $t1 = gettimeofday();
     #  print STDERR "# done storing sequences \n";
 
