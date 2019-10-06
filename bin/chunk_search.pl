@@ -169,8 +169,10 @@ use TomfyMisc qw ' fasta2seqon1line ';
       #   print STDERR "$_  ", $count_distrib{$_} // 0 , "\n";
       # }
 
+
       my $output_string = '';
       my @soids = sort {$a <=> $b} keys %oid_bestmatchids;
+      my $distance_calc_count = 0;
       #    while (my($oid, $bestids) = each %oid_bestmatchids) {
       for my $oid (@soids) {
 	my $bestids = $oid_bestmatchids{$oid};
@@ -180,7 +182,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	for (@$bestids) {
 	  my ($anid, $mc) = ($_->[0], $_->[1]);
 	  $id_mc{$anid} = $mc;
-	  $id_dist{$anid} = distance_C($id_sequence->{$anid}, $other_id_sequence->{$oid})
+	  $id_dist{$anid} = distance_C($id_sequence->{$anid}, $other_id_sequence->{$oid});
+            $distance_calc_count++;
 	}
 	$output_string .= "$oid     " . output_string(\%id_dist, \%id_mc, $sort) . "\n";
 	# print "$oid     ";
@@ -195,7 +198,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
       }
       $t4 = gettimeofday();
       print $output_string;
-      print "# construct data structure: ", $t1-$t0, "   candidates: ", $t3-$t2, "   dists to candidates: ", $t4-$t3, "\n";
+      print "# construct data structure: ", $t1-$t0, "   candidates: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
  
     }
   } else {			# new way
@@ -241,6 +244,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
       my $output_string = '';
       my @soids = sort {$a <=> $b} keys %oid_bestmatchids;
+      my $distance_calc_count = 0;
       for my $oid (@soids) {
 	my %id_dist = ();
 	my %id_mc = ();
@@ -248,7 +252,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	for (@$bestids) {
 	  my ($anid, $mc) = ($_->[0], $_->[1]);
 	  $id_mc{$anid} = $mc;
-	  $id_dist{$anid} = distance_C($id_sequence->{$anid}, $other_id_sequence->{$oid})
+	  $id_dist{$anid} = distance_C($id_sequence->{$anid}, $other_id_sequence->{$oid});
+          $distance_calc_count++;
 	}
 	$output_string .= "$oid     " . output_string(\%id_dist, \%id_mc, $sort) . "\n";
       }
@@ -256,7 +261,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
 #########################################################################################
       print $output_string;
-      print "# construct data structure: ", $t1-$t0, "   candidates: ", $t3-$t2, "   dists to candidates: ", $t4-$t3, "\n";
+      print "# construct data structure: ", $t1-$t0, "   candidates: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
     }
   }
 }				# end main
