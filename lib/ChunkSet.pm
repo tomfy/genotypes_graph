@@ -55,15 +55,19 @@ sub get_chunk_match_counts{
    my $sequence = shift;        # the sequence to match
    my $id_matchcount = shift // {};
 
+my $matches_count = 0;
    my @seq_chars = split('', $sequence);
    while ( my ($ich, $ch_indices) = each @{$self->{chunk_spec_arrays}}) { # index, and array ref.
       my $ch_spec =  $self->{chunk_specifiers}->[$ich]; # as a string
       my $chunk_seq = join('', @seq_chars[@$ch_indices]);
-	for( @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} // [] } ){
+      my $id_matches = $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} // [];
+	for( @{ $id_matches } ){
          $id_matchcount->{$_}++;
       }
+      $matches_count += scalar @{ $id_matches };
 
    }
+   return $matches_count;
 }
 
 ###################

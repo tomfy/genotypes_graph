@@ -224,12 +224,14 @@ use TomfyMisc qw ' fasta2seqon1line ';
     if (defined $other_fasta  and  -f $other_fasta) {
       my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
       my ($other_id_sequence, $ominL, $omaxL) = fasta_string_to_hash($other_fasta_string);
-      my $n_searches_done = 0;
+      my ($n_searches_done, $matches_count) = (0, 0);
+      
       while (my ($other_id, $other_seq) = each %$other_id_sequence) {
 	#	print "other seq: $other_seq \n";
 	my $otherid_matchcount =  {};
+        
 	for my $chunk_set_obj (@chuck_set_objects) {
-	  $chunk_set_obj->get_chunk_match_counts($other_seq, $otherid_matchcount);
+           $matches_count += $chunk_set_obj->get_chunk_match_counts($other_seq, $otherid_matchcount);
 	}
 
 	my @best_matchids = (sort {$otherid_matchcount->{$b} <=> $otherid_matchcount->{$a}} keys %$otherid_matchcount);
@@ -261,9 +263,9 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
 #########################################################################################
       print $output_string;
-      print "# construct data structure: ", $t1-$t0, "   candidates: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
-    }
-  }
+      print "# construct data structure: ", $t1-$t0, "   candidates; matches_count: $matches_count  time: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
+   }
+ }
 }				# end main
 
 ##########################################################################################
