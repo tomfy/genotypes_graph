@@ -1,0 +1,38 @@
+package ChunkSet;
+#use Moose;
+use Mouse;
+use namespace::autoclean;
+use Carp::Assert;
+use List::Util qw ( min max sum );
+use Inline 'C';
+use constant MISSING_DATA => 'X';
+use constant BIG_NUMBER => 1_000_000_000;
+
+# a class for genotypes
+# each has an identifier (integer),
+# and a genotype represented as a string
+# containing characters 0, 1, 2, MISSING_DATA
+# 0 = AA, 1 = Aa, 2 = aa.
+
+has chunk_specifiers => (
+           isa => 'ArrayRef',
+           is => 'rw',
+           required => 1,
+			);
+
+has seqid_seq => (
+		  isa => 'HashRef',
+		  is => 'rw',
+		  required => 1,
+		  );
+
+has chunk__seq_ids => (
+		       isa => 'HashRef',
+		       is => 'rw',
+		       default => sub { {} },
+		      );
+
+sub BUILD{
+  
+
+}
