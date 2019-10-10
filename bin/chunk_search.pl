@@ -37,9 +37,9 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $chunk_size = 6;
   my $n_keep = 25;
   my $new = 1;
-  my $n_chunk_sets = 1;
+  my $n_chunk_sets = undef;
   my $sort = 'distance';	# 'id' to sort matches by id instead
-  my $n_chunks = undef;		# if undef, do 1 full chunk set.
+  my $n_chunks = BIG_NUMBER;		# 
 
   GetOptions(
 	     'input_filename|fasta1|f1|stem=s' => \$input_filename,
@@ -54,6 +54,12 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'sort=s' => \$sort,
 	     'nchunks=i' => \$n_chunks,
 	    );
+
+  if($n_chunks == BIG_NUMBER){
+    $n_chunk_sets = 1;
+  }elsif(! defined $n_chunk_sets){
+    $n_chunk_sets = BIG_NUMBER;
+  }
 
   die "Input file for constructing graph must be specified, is undefined. Bye.\n" if(!defined $input_filename);
 
@@ -191,7 +197,6 @@ use TomfyMisc qw ' fasta2seqon1line ';
     }
   } else {			# new way
     my ($id_sequence, $minL, $maxL) = fasta_string_to_hash($fasta1_string);
-    #    my $sequence_length = length ((values %$id_sequence)[0]);
     my $sequence_length = ($minL == $maxL)? $minL : die "Sequence lengths not all equal!\n";
     $t0 = gettimeofday();
     my @chuck_set_objects = ();
@@ -238,11 +243,11 @@ use TomfyMisc qw ' fasta2seqon1line ';
       my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
       my ($other_id_sequence, $ominL, $omaxL) = fasta_string_to_hash($other_fasta_string);
       my ($n_searches_done, $matches_count) = (0, 0);
-      
+
       while (my ($other_id, $other_seq) = each %$other_id_sequence) {
 	#	print "other seq: $other_seq \n";
 	my $otherid_matchcount =  {};
-        
+
 	for my $chunk_set_obj (@chuck_set_objects) {
            $matches_count += $chunk_set_obj->get_chunk_match_counts($other_seq, $otherid_matchcount);
 	}
