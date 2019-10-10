@@ -64,6 +64,11 @@ sub get_chunk_match_counts{
       }
 
    }
+ }
+
+sub n_chunks{
+  my $self = shift;
+  return scalar @{ $self->chunk_specifiers() };
 }
 
 ###################
