@@ -32,6 +32,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   my $seed = 1234579;
   my $exhaustive_search_outfilename = 'exh_search_out';
+  my $do_chunk_search = 1;
   my $do_exhaustive_search = 0;
 
   my $chunk_size = 6;
@@ -39,7 +40,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $new = 1;
   my $n_chunk_sets = undef;
   my $sort = 'distance';	# 'id' to sort matches by id instead
-  my $n_chunks = BIG_NUMBER;		# 
+  my $n_chunks = undef;		# 
 
   GetOptions(
 	     'input_filename|fasta1|f1|stem=s' => \$input_filename,
@@ -47,6 +48,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'error_prob=f' => \$error_prob,
 
 	     'keep=i' => \$n_keep, # (min) number of dists to calculate for each search, based on number of chunk matches.
+	     'search!' => \$do_chunk_search,
 	     'exhaustive_search!' => \$do_exhaustive_search,
 	     'chunk_size=i' => \$chunk_size,
 	     'new!' => \$new,
@@ -55,9 +57,9 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'nchunks=i' => \$n_chunks,
 	    );
 
-  if($n_chunks == BIG_NUMBER){
-    $n_chunk_sets = 1;
-  }elsif(! defined $n_chunk_sets){
+  if (! defined $n_chunks) {
+    $n_chunk_sets //= 1;
+  } elsif (! defined $n_chunk_sets) {
     $n_chunk_sets = BIG_NUMBER;
   }
 
@@ -180,40 +182,36 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	  $distance_calc_count++;
 	}
 	$output_string .= "$oid     " . output_string(\%id_dist, \%id_mc, $sort) . "\n";
-	# print "$oid     ";
-	# my @sorted_ids = ($sort eq 'id')? 
-	#   sort {$a <=> $b} keys %id_dist :
-	#   sort { $id_dist{$a} <=> $id_dist{$b} } keys %id_dist;
 
-	# for (@sorted_ids) {
-	#   printf("%3d %3d %8.5f  ", $_, $id_mc{$_}, $id_dist{$_});
-	# }
-	# print "\n";
       }
       $t4 = gettimeofday();
       print $output_string;
       print "# construct data structure: ", $t1-$t0, "   candidates: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
- 
+
     }
-  } else {			# new way
+  } elsif (0) {			# new way
     my ($id_sequence, $minL, $maxL) = fasta_string_to_hash($fasta1_string);
     my $sequence_length = ($minL == $maxL)? $minL : die "Sequence lengths not all equal!\n";
     $t0 = gettimeofday();
-    my @chuck_set_objects = ();
 
+    #### construct the chunks ####
+    my @chunk_set_objects = ();
     if (defined $n_chunks) {
       my $n_snps_to_use = min($sequence_length, $n_chunks*$chunk_size);
       my $indices = [0 .. $n_snps_to_use - 1]; # first set not randomized.
       my $a_chunk_set = ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
-      push @chuck_set_objects, $a_chunk_set;
+      push @chunk_set_objects, $a_chunk_set;
       $n_chunks -= $a_chunk_set->n_chunks();
-
+      print STDERR "A: $n_chunk_sets $n_chunks: ", $a_chunk_set->n_chunks(), "\n";
       for (2..$n_chunk_sets) {
 	$n_snps_to_use = min($sequence_length, $n_chunks*$chunk_size);
 	$indices = randomize_array([0 .. $n_snps_to_use - 1]);
 	$a_chunk_set = ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
-	push @chuck_set_objects, $a_chunk_set;
+	push @chunk_set_objects, $a_chunk_set;
+
 	$n_chunks -= $a_chunk_set->n_chunks();
+	print STDERR "A: $n_chunk_sets $n_chunks: ", $a_chunk_set->n_chunks(), "\n";
+
 	if ($n_chunks == 0) {
 	  last;
 	} elsif ($n_chunks < 0) {
@@ -224,16 +222,17 @@ use TomfyMisc qw ' fasta2seqon1line ';
     } else {			# just do n_chunks complete chunk sets
 
       my $indices = [0 .. $sequence_length - 1]; # first set not randomized.
-	push @chuck_set_objects, ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
-
+      push @chunk_set_objects, ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
+      print STDERR "B: $n_chunk_sets ", $n_chunks // 'undef', "\n";
       for (2..$n_chunk_sets) {
 	$indices = randomize_array([0 .. $sequence_length - 1]);
-	push @chuck_set_objects, ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
+	push @chunk_set_objects, ChunkSet->new({seqid_seq => $id_sequence, chunk_specifiers => chunk_indices($indices, $chunk_size)});
+	print STDERR "B: $n_chunk_sets ", $n_chunks // 'undef', "\n";
       }
 
     }
-
     $t1 = gettimeofday();
+
     #  print STDERR "# done storing sequences \n";
 
     # read in another fasta file and search for each of its sequences ...
@@ -248,8 +247,8 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	#	print "other seq: $other_seq \n";
 	my $otherid_matchcount =  {};
 
-	for my $chunk_set_obj (@chuck_set_objects) {
-           $matches_count += $chunk_set_obj->get_chunk_match_counts($other_seq, $otherid_matchcount);
+	for my $chunk_set_obj (@chunk_set_objects) {
+	  $matches_count += $chunk_set_obj->get_chunk_match_counts($other_seq, $otherid_matchcount);
 	}
 
 	my @best_matchids = (sort {$otherid_matchcount->{$b} <=> $otherid_matchcount->{$a}} keys %$otherid_matchcount);
@@ -282,8 +281,59 @@ use TomfyMisc qw ' fasta2seqon1line ';
       #########################################################################################
       print $output_string;
       print "# construct data structure: ", $t1-$t0, "   candidates; matches_count: $matches_count  time: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
-   }
- }
+    }
+  } else {			### latest ###
+    $t1 = gettimeofday();
+    my ($id_sequence, $minL, $maxL) = fasta_string_to_hash($fasta1_string);
+    my $sequence_length = ($minL == $maxL)? $minL : die "Sequence lengths not all equal!\n";
+    my $chunk_set_object = ChunkSet->new({seqid_seq => $id_sequence, chunk_size => $chunk_size, sequence_length => $sequence_length, n_chunks => $n_chunks});
+
+    # read in another fasta file and search for each of its sequences ...
+    $t2 = gettimeofday();
+    my %oid_bestmatchids = ();
+    if (defined $other_fasta  and  -f $other_fasta) {
+      my $other_fasta_string = TomfyMisc::fasta2seqon1line(file_to_string($other_fasta));
+      my ($other_id_sequence, $ominL, $omaxL) = fasta_string_to_hash($other_fasta_string);
+      my ($n_searches_done, $matches_count) = (0, 0);
+
+      while (my ($other_id, $other_seq) = each %$other_id_sequence) {
+	my $otherid_matchcount =  {};
+
+	$matches_count += $chunk_set_object->get_chunk_match_counts($other_seq, $otherid_matchcount);
+
+	my @best_matchids = (sort {$otherid_matchcount->{$b} <=> $otherid_matchcount->{$a}} keys %$otherid_matchcount);
+	@best_matchids = @best_matchids[0..$n_keep-1] if($n_keep < scalar @best_matchids);
+	@best_matchids = map([$_, $otherid_matchcount->{$_}], @best_matchids);
+	$oid_bestmatchids{$other_id} = \@best_matchids;
+
+	$n_searches_done++;
+	print STDERR "# n searches done: $n_searches_done \n" if($n_searches_done % 100  == 0);
+      }
+      $t3 = gettimeofday();
+
+      my $output_string = '';
+      my @soids = sort {$a <=> $b} keys %oid_bestmatchids;
+      my $distance_calc_count = 0;
+      for my $oid (@soids) {
+	my %id_dist = ();
+	my %id_mc = ();
+	my $bestids = $oid_bestmatchids{$oid};	
+	for (@$bestids) {
+	  my ($anid, $mc) = ($_->[0], $_->[1]);
+	  $id_mc{$anid} = $mc;
+	  $id_dist{$anid} = distance_C($id_sequence->{$anid}, $other_id_sequence->{$oid});
+          $distance_calc_count++;
+	}
+	$output_string .= "$oid     " . output_string(\%id_dist, \%id_mc, $sort) . "\n";
+      }
+      $t4 = gettimeofday();
+
+      #########################################################################################
+      print $output_string;
+      print "# construct data structure: ", $t2-$t1, "   candidates; matches_count: $matches_count  time: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
+    }
+
+  }
 }				# end main
 
 ##########################################################################################

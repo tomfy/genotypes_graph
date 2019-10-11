@@ -1,15 +1,33 @@
 package ChunkSet;
-#use Moose;
-use Mouse;
+use Moose;
+#use Mouse;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
 #use Inline 'C';
 
+has n_chunks => (
+		 isa => 'Maybe[Int]',
+		 is => 'ro',
+		 required => 1,
+		);
+
+has chunk_size => (
+		   isa => 'Int',
+		   is => 'ro',
+		   required => 1,
+		  );
+
+has sequence_length => (
+			isa => 'Int',
+			is => 'ro',
+			required => 1,
+		       );
+
 has chunk_specifiers => ( # array ref of strings, e.g. ['1_22_108_23', ...
 			 isa => 'ArrayRef',
 			 is => 'ro',
-			 required => 1,
+			 required => 0,
 			);
 
 has chunk_spec_arrays => ( # array ref of array refs, e.g. [ [1,22,108,23], ...
@@ -30,16 +48,28 @@ has chunkspec__seq_ids => (
 			   default => sub { {} },
 			  );
 
+
 sub BUILD{
   my $self = shift;
+  my ($chunk_size, $seq_length) = ($self->chunk_size(), $self->sequence_length());
+  my $n_chunks = $self->n_chunks() // int( $seq_length / $chunk_size );
+#  print "AAA: $chunk_size $n_chunks $seq_length \n";
 
-  for (@{$self->chunk_specifiers()}) {
+  my $n_snps_to_use = min($seq_length, $n_chunks*$chunk_size);
+  my @chunk_specs = @{ chunk_index_strings([0 .. $n_snps_to_use], $chunk_size ) };
+  while (@chunk_specs < $n_chunks) {
+    $n_snps_to_use = min($seq_length, $n_chunks*$chunk_size);
+    push @chunk_specs, @{ chunk_index_strings( randomize_array([0 .. $n_snps_to_use - 1]), $chunk_size ) };
+  }
+ # print join('  ', @chunk_specs), "\n";
+
+  $self->{chunk_specifiers} = \@chunk_specs;
+  for (@chunk_specs) {
     $self->chunkspec__seq_ids()->{$_} = {};
   }
+  my @chunk_spec_arrays = map( [split('_', $_)], @chunk_specs ); # array of array refs, each of which holds indices of one chunk
+  $self->{chunk_spec_arrays} = \@chunk_spec_arrays;
 
-  my @chunk_spec_arrays = map( [split('_', $_)], @{$self->chunk_specifiers()} );
-  $self->{chunk_spec_arrays} = [map( [split('_', $_)], @{$self->chunk_specifiers()} )]; 
-  #  $self->chunk_size( scalar @{ $chunk_spec_arrays[0] } );
   while ( my($seqid, $seq) = each %{$self->seqid_seq()} ) { # loop over sequences
     my @seq_chars = split('', $seq);
     while ( my ($ich, $ch_indices) = each @chunk_spec_arrays) { # index, and array ref.
@@ -49,6 +79,27 @@ sub BUILD{
     }
   }
 }
+
+
+# sub BUILD{
+#   my $self = shift;
+
+#   for (@{$self->chunk_specifiers()}) {
+#     $self->chunkspec__seq_ids()->{$_} = {};
+#   }
+
+#   my @chunk_spec_arrays = map( [split('_', $_)], @{$self->chunk_specifiers()} );
+#   $self->{chunk_spec_arrays} = [map( [split('_', $_)], @{$self->chunk_specifiers()} )]; 
+#   #  $self->chunk_size( scalar @{ $chunk_spec_arrays[0] } );
+#   while ( my($seqid, $seq) = each %{$self->seqid_seq()} ) { # loop over sequences
+#     my @seq_chars = split('', $seq);
+#     while ( my ($ich, $ch_indices) = each @chunk_spec_arrays) { # index, and array ref.
+#       my $ch_spec = $self->{chunk_specifiers}->[$ich]; # as a string
+#       my $chunk_seq = join('', @seq_chars[@$ch_indices]);
+#       push @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} //= []  }, $seqid;
+#     }
+#   }
+# }
 
 sub get_chunk_match_counts{
   my $self = shift;
@@ -70,13 +121,28 @@ sub get_chunk_match_counts{
   return $matches_count;
 }
 
-sub n_chunks{
-  my $self = shift;
-  return scalar @{ $self->chunk_specifiers() };
-}
+# sub n_chunks{
+#   my $self = shift;
+#   return scalar @{ $self->chunk_specifiers() };
+# }
 
 
 ###################
+
+sub chunk_index_strings{	# 
+  my $indices = shift;
+  my $chunk_size = shift;
+  #  print "Indices: ", join(", ", @$indices), "\n";
+  my @chunk_specs = ();
+  # print join(",", @$indices), "\n";
+  while (scalar @$indices >= $chunk_size) {
+    my $chunk_indices_str = join("_", splice( @$indices, 0, $chunk_size ));
+    push @chunk_specs, $chunk_indices_str;
+    # join("_", splice( @$indices, 0, $chunk_size )); # @chunk_indices);
+  }
+  #  print STDERR "XXX: ", join(";", @chunk_specs), "\n";
+  return \@chunk_specs;
+}
 
 sub scrambled_chunks{
   my $sequence = shift;
