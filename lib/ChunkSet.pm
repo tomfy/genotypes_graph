@@ -4,7 +4,7 @@ use Moose;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
-use Inline 'C';
+# use Inline 'C';
 
 has n_chunks => (
 		 isa => 'Maybe[Int]',
@@ -42,12 +42,12 @@ has seqid_seq => (
 		  required => 1,
 		 );
 
-has chunkspec__seq_ids => ( # e.g. { '12_43_19_134_11_9' => { '011212' => [AT1g13487, ...] } }
-                           # i.e. key: string with snp indices, value: hashref (key: sequence, value: array ref of sequence ids having that sequence for indices in the chunkspec key.
-			   isa => 'HashRef',
-			   is => 'ro',
-			   default => sub { {} },
-			  );
+##### has chunkspec__seq_ids => ( # e.g. { '12_43_19_134_11_9' => { '011212' => [AT1g13487, ...] } }
+#                            # i.e. key: string with snp indices, value: hashref (key: sequence, value: array ref of sequence ids having that sequence for indices in the chunkspec key.
+# 			   isa => 'HashRef',
+# 			   is => 'ro',
+# 			   default => sub { {} },
+# 			  );
 
 has id_index => ( # keys sequences ids; values corresponding array indices (0, 1, 2, ...)
                  isa => 'HashRef',
@@ -69,7 +69,6 @@ has chunkspec__seq_indices => (
                                default => sub { {} },
                               );
 
-
 sub BUILD{
    my $self = shift;
    my ($chunk_size, $seq_length) = ($self->chunk_size(), $self->sequence_length());
@@ -77,17 +76,17 @@ sub BUILD{
    #  print "AAA: $chunk_size $n_chunks $seq_length \n";
 
    my $n_snps_to_use = min($seq_length, $n_chunks*$chunk_size);
-   my @chunk_specs = @{ chunk_index_strings([0 .. $n_snps_to_use], $chunk_size ) };
+   my @chunk_specs = @{ chunk_index_strings([0 .. $n_snps_to_use - 1], $chunk_size ) };
    while (@chunk_specs < $n_chunks) {
-      $n_snps_to_use = min($seq_length, $n_chunks*$chunk_size);
+      $n_snps_to_use = min($seq_length, ($n_chunks - scalar @chunk_specs)*$chunk_size);
       push @chunk_specs, @{ chunk_index_strings( randomize_array([0 .. $n_snps_to_use - 1]), $chunk_size ) };
    }
    # print join('  ', @chunk_specs), "\n";
 
    $self->{chunk_specifiers} = \@chunk_specs;
-   for (@chunk_specs) {
-      $self->chunkspec__seq_ids()->{$_} = {};
-   }
+ ##### for (@chunk_specs) {
+   #    $self->chunkspec__seq_ids()->{$_} = {};
+   # }
    my @chunk_spec_arrays = map( [split('_', $_)], @chunk_specs ); # array of array refs, each of which holds indices of one chunk
    $self->{chunk_spec_arrays} = \@chunk_spec_arrays;
 
@@ -99,10 +98,12 @@ sub BUILD{
       while ( my ($ich, $ch_indices) = each @chunk_spec_arrays) { # index, and array ref.
          my $ch_spec = $self->{chunk_specifiers}->[$ich]; # as a string
          my $chunk_seq = join('', @seq_chars[@$ch_indices]);
-         push @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} //= []  }, $seqid;
+  #####       push @{ $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} //= []  }, $seqid;
          push @{ $self->{chunkspec__seq_indices}->{$ch_spec}->{$chunk_seq} //= []  }, $index;
       }
-   }
+    }
+   print "# n_chunks (requested): ", $self->n_chunks(), "  chunk size: ", $self->chunk_size(),
+     "  n chunks(actual): ", scalar @{$self->chunk_specifiers()}, "  ", scalar @{$self->chunk_spec_arrays()}, "\n";
 }
 
 
@@ -139,19 +140,20 @@ sub get_chunk_match_counts{
    while ( my ($ich, $ch_indices) = each @{$self->{chunk_spec_arrays}}) { # index, and array ref.
       my $ch_spec =  $self->{chunk_specifiers}->[$ich]; # as a string
       my $chunk_seq = join('', @seq_chars[@$ch_indices]);
-      my $id_matches = $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} // [];
-      for ( @{ $id_matches } ) {
-         $id_matchcount->{$_}++;
-      }
-      $matches_count += scalar @{ $id_matches };
+##### my $id_matches = $self->{chunkspec__seq_ids}->{$ch_spec}->{$chunk_seq} // [];
+      # for ( @{ $id_matches } ) {
+      #    $id_matchcount->{$_}++;
+      # }
+   #   $matches_count += scalar @{ $id_matches };
       my $index_matches = $self->{chunkspec__seq_indices}->{$ch_spec}->{$chunk_seq} // [];
-      if (0) {
+      if (1) {
          for ( @$index_matches ) {
             $index_matchcount->[$_]++;
          }
       } else {
-         count_matches(scalar @$index_matches, $index_matches, $index_matchcount);
+       #  count_matches(scalar @$index_matches, $index_matches, $index_matchcount);
       }
+      $matches_count += scalar @{ $index_matches };
    }
    return $matches_count;
 }
@@ -215,18 +217,18 @@ __PACKAGE__->meta->make_immutable;
 
 1;
 
-__DATA__
+#__DATA__
 ############################################
 ########### inline C stuff #################
-__C__
+# __C__
 
-  // SV* 
-int count_matches(int size, int* indices, SV* matchingindex_counts){
-   int i=0;
-   for (i=0; i< size; i++) {
-     //     matchingindex_counts[indices[i]]++;
-     printf("%d8  %d8\n", i, indices[i]);   
-   }
-}
+#   // SV* 
+# int count_matches(int size, int* indices, SV* matchingindex_counts){
+#    int i=0;
+#    for (i=0; i< size; i++) {
+#      //     matchingindex_counts[indices[i]]++;
+#      printf("%d8  %d8\n", i, indices[i]);   
+#    }
+# }
 
 
