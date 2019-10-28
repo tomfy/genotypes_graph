@@ -1,10 +1,10 @@
 package ChunkSet;
-use Moose;
-#use Mouse;
+# use Moose;
+use Mouse;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
-# use Inline 'C';
+use Inline 'C';
 
 has n_chunks => (
 		 isa => 'Maybe[Int]',
@@ -73,6 +73,7 @@ sub BUILD{
    my $self = shift;
    my ($chunk_size, $seq_length) = ($self->chunk_size(), $self->sequence_length());
    my $n_chunks = $self->n_chunks() // int( $seq_length / $chunk_size );
+   $self->{n_chunks} = $n_chunks;
    #  print "AAA: $chunk_size $n_chunks $seq_length \n";
 
    my $n_snps_to_use = min($seq_length, $n_chunks*$chunk_size);
@@ -102,8 +103,17 @@ sub BUILD{
          push @{ $self->{chunkspec__seq_indices}->{$ch_spec}->{$chunk_seq} //= []  }, $index;
       }
     }
-   print "# n_chunks (requested): ", $self->n_chunks(), "  chunk size: ", $self->chunk_size(),
+   print "# n_chunks (requested): ", $self->n_chunks() // -1, "  chunk size: ", $self->chunk_size(),
      "  n chunks(actual): ", scalar @{$self->chunk_specifiers()}, "  ", scalar @{$self->chunk_spec_arrays()}, "\n";
+
+
+ # my $a = [3,3,3,3,7,7];
+ # xxxxx($a->[0]);
+
+ #  my $counts = [0,0,0,0,0,0,0,0,0,0];
+ #  increment_specified_counts($counts, $a, scalar @$a);
+ #  print join(', ', @$counts), "\n";
+   
 }
 
 
@@ -146,12 +156,19 @@ sub get_chunk_match_counts{
       # }
    #   $matches_count += scalar @{ $id_matches };
       my $index_matches = $self->{chunkspec__seq_indices}->{$ch_spec}->{$chunk_seq} // [];
-      if (1) {
-         for ( @$index_matches ) {
+      if (0) {
+	for ( @$index_matches ) {
+	#  print xxxx($_), "\n";
             $index_matchcount->[$_]++;
          }
-      } else {
-       #  count_matches(scalar @$index_matches, $index_matches, $index_matchcount);
+      } else { # using Inline C, but it's slower!
+	#  count_matches(scalar @$index_matches, $index_matches, $index_matchcount);
+#	xxxxx(1);
+#	my $a = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+#	my $b = [3,3,3,3,5,5,10];
+	increment_specified_counts($index_matchcount, $index_matches, scalar @$index_matches);
+#	increment_specified_counts($a, $b, scalar @$b);
+#	print "XXXXXXX: ", join(' ', @$a), "\n";
       }
       $matches_count += scalar @{ $index_matches };
    }
@@ -217,18 +234,25 @@ __PACKAGE__->meta->make_immutable;
 
 1;
 
-#__DATA__
+__DATA__
 ############################################
 ########### inline C stuff #################
-# __C__
+__C__
 
-#   // SV* 
-# int count_matches(int size, int* indices, SV* matchingindex_counts){
-#    int i=0;
-#    for (i=0; i< size; i++) {
-#      //     matchingindex_counts[indices[i]]++;
-#      printf("%d8  %d8\n", i, indices[i]);   
-#    }
-# }
+void increment_specified_counts( AV* index_counts, AV* indices_to_inc, int size) {
+    int i;
+    int match_index;
+    int count;
+ //   printf("%8d \n", size);
+    for( i=0; i<size; i++ ) {
+      match_index = SvIV( *av_fetch(indices_to_inc, i, NULL ) );
+      count = SvIV(*av_fetch(index_counts, match_index, NULL ) );
+//      printf("%8d  %8d \n", match_index, count);
+      av_store( index_counts, match_index, newSViv( count + 1 ) );
+    }
+    // return SvIV( *av_fetch( index_counts, 0, NULL) );
+  }
+
+
 
 
