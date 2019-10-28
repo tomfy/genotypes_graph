@@ -37,7 +37,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   my $do_exhaustive_search = 0;
 
   my $chunk_size = 6;
-  my $n_keep = 25;
+  my $n_keep = 20;
   my $new = 1;
   my $n_chunk_sets = undef;
   my $sort = 'distance';	# 'id' to sort matches by id instead
