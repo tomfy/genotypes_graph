@@ -39,11 +39,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   my $chunk_size = 6;
   my $n_keep = 20;
-<<<<<<< HEAD
-  my $new = 1;
-=======
 #  my $new = 1;
->>>>>>> 73e7af9e8f566f9cec9d91115e01ea00624e1eca
   my $n_chunk_sets = undef;
   my $sort = 'distance';	# 'id' to sort matches by id instead
   my $n_chunks = undef;		#
