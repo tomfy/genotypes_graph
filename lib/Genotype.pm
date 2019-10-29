@@ -62,7 +62,17 @@ around BUILDARGS => sub {
       }
    }
    # otherwise, don't modify arguments, should be array ref with id, sequence, and optionally generation and pedigree
-};
+ };
+
+sub BUILD{
+  my $self = shift;
+  my $a = [3,3,3,3,7,7];
+ #   xxxxx($a->[0]);
+
+  my $counts = [0,0,0,0,0,0,0,0,0,0];
+  increment_specified_counts($counts, $a, scalar @$a);
+  print join(', ', @$counts), "\n";
+}
 
 sub clone{
    my ($self, %params) = @_;
@@ -381,4 +391,22 @@ Inline_Stack_Done; */
 
 }
 
+//
 
+void increment_specified_counts( AV *index_counts, AV *indices_to_inc, int size) {
+    int i;
+    int match_index;
+    int count;
+    printf("%8d \n", size);
+    for( i=0; i<size; i++ ) {
+      match_index = SvIV( *av_fetch(indices_to_inc, i, NULL ) );
+      count = SvIV(*av_fetch(index_counts, match_index, NULL ) );
+//      printf("%8d  %8d \n", match_index, count);
+      av_store( index_counts, match_index, newSViv( count + 1 ) );
+    }
+    // return SvIV( *av_fetch( index_counts, 0, NULL) );
+  }
+
+void xxxxx(int x){
+  printf("AAAAAAAA %8d\n", x);
+}

@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use List::Util qw (min max sum);
 use Time::HiRes qw( gettimeofday );
+use Math::GSL::Sort qw ( :all );
 use Inline 'C';
 use constant MISSING_DATA => 'X';
 use constant BIG_NUMBER => 1_000_000_000;
@@ -38,10 +39,14 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
   my $chunk_size = 6;
   my $n_keep = 20;
+<<<<<<< HEAD
   my $new = 1;
+=======
+#  my $new = 1;
+>>>>>>> 73e7af9e8f566f9cec9d91115e01ea00624e1eca
   my $n_chunk_sets = undef;
   my $sort = 'distance';	# 'id' to sort matches by id instead
-  my $n_chunks = undef;		# 
+  my $n_chunks = undef;		#
 
   GetOptions(
 	     'input_filename|fasta1|f1|stem=s' => \$input_filename,
@@ -52,7 +57,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	     'search!' => \$do_chunk_search,
 	     'exhaustive_search!' => \$do_exhaustive_search,
 	     'size|chunk_size=i' => \$chunk_size,
-	     'new!' => \$new,
+	#     'new!' => \$new,
 	     'sets_of_chunks=i' => \$n_chunk_sets,
 	     'sort=s' => \$sort,
 	     'nchunks=i' => \$n_chunks,
@@ -105,7 +110,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
       my @otherindex_matchcount = ((0) x scalar $n_sequences); # array of 
       $matches_count += $chunk_set_object->get_chunk_match_counts($other_seq, $otherid_matchcount, \@otherindex_matchcount);
 
-      if (0) { # use ids, hashes
+      if (0) {			# use ids, hashes
 	my @best_matchids =  keys %$otherid_matchcount;
 	#      map($chunk_set_object->{index_id}->[$_]  , @otherindex_matchcount);
 	#     my $PQ = MyPriorityQueue->new($n_keep);
@@ -113,15 +118,19 @@ use TomfyMisc qw ' fasta2seqon1line ';
 	@best_matchids = @best_matchids[0..$n_keep-1] if($n_keep < scalar @best_matchids);
 	@best_matchids = map([$_, $otherid_matchcount->{$_}], @best_matchids);
 	$oid_bestmatchids{$other_id} = \@best_matchids;
-      } else { # use indices, arrays
+      } else {			# use indices, arrays
 	my @best_matchids = ();
-	my @best_matchindices = sort { $otherindex_matchcount[$b] <=> $otherindex_matchcount[$a] } keys @otherindex_matchcount;
-	# for my $idx (@best_matchindices[0..$n_keep-1]) {
-	#    my $an_id = $ids_array->[$idx];
-	#    my $count = $otherindex_matchcount[$idx];
-	#    push @best_matchids, [$an_id, $count];
-	# }
-	@best_matchids = map([$ids_array->[$_], $otherindex_matchcount[$_]], @best_matchindices[0 .. ($n_keep-1) ] );
+	my @best_matchindices = ();
+	if (1) { # full sort.
+	  @best_matchindices = sort { $otherindex_matchcount[$b] <=> $otherindex_matchcount[$a] } keys @otherindex_matchcount; # largest to smallest
+	  @best_matchids = map([$ids_array->[$_], $otherindex_matchcount[$_]], @best_matchindices[0 .. ($n_keep-1) ] );
+	} else { # just get best $n_keep 
+	    my $a = [ (0) x $n_keep ];
+	  my ($status, $topindices) = gsl_sort_largest_index( $a, $n_keep, \@otherindex_matchcount, 1, scalar @otherindex_matchcount);
+	  @best_matchindices = @$topindices;
+	   @best_matchids = map([$ids_array->[$_], $otherindex_matchcount[$_]], @best_matchindices);
+	}
+
 	$oid_bestmatchids{$other_id} = \@best_matchids;
       }
 
