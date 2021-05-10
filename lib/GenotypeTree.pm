@@ -42,7 +42,9 @@ sub BUILD{
 sub add_genotype{
   my $self = shift;
   my $gobj = shift;
-  my $genotype_string = $gobj->sequence(); # entire (all snps) genotype as string.
+  my $chunk_indices = shift // undef;
+  my $genotype_string = $gobj->get_chunk($chunk_indices); #
+  print STDERR $gobj->id(), "   $genotype_string \n";
   my $id = $gobj->id();
   my $root = $self->root();
   $root->add_id($id);
@@ -66,23 +68,37 @@ sub search{
   my $self = shift;
   my $gobj = shift;
   my $max_bad_count = shift // die;
+  my $chunk_indices = shift // undef;
   my $root = $self->root();
-  my $genotype_string = $gobj->sequence();
+  my $genotype_string = $gobj->get_chunk($chunk_indices); # sequence();
+
+  print STDERR "\n", "newick: ", $root->newick_recursive(), "\n";
+
   my $ghead = substr($genotype_string, 0, 1);
   my $matching_ids = '';
+  my $matchid_matchinfo = {};
   if ($ghead eq MISSING_DATA  or  ($max_bad_count > 0)) {
     while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
-      $matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence(), $max_bad_count);
+      $matching_ids .= $child->search_recursive($gobj->id(),
+						$genotype_string, #$gobj->sequence(),
+						$max_bad_count, $matchid_matchinfo, 0, 0);
     }
   } else {
     while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
       if ($gh eq $ghead  or  $gh eq MISSING_DATA) {
-	$matching_ids .= $child->search_recursive($gobj->id(), $gobj->sequence(), $max_bad_count);
+	$matching_ids .= $child->search_recursive($gobj->id(),
+						  $genotype_string, #$gobj->sequence(),
+						  $max_bad_count, $matchid_matchinfo, 0, 0);
       }
     }
   }
   $matching_ids =~ s/,\s*$//;
-  my @sorted_ids = sort {$a <=> $b} split(',', $matching_ids);
+ # print STDERR $gobj->id(), "   matches:  $matching_ids \n";
+  my @sorted_ids = sort  split(',', $matching_ids);
+  print "qid: ", $gobj->id(), "\n";
+  while(my ($k, $v) = each %{$matchid_matchinfo}){
+    print "   match id: $k    $v \n";
+  }
 
   return( scalar @sorted_ids > 0)?
     # $gobj->id() . "  " .

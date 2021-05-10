@@ -11,14 +11,12 @@ no warnings 'recursion';
 
 use constant DEBUG => 0;
 
-
 # a class for nodes of a tree.
 has ids => (
             isa => 'ArrayRef',
             is => 'ro',
             default => sub { [] },
            );
-
 
 has count => (
 	      #      traits => ['Counter'],
@@ -153,16 +151,22 @@ sub search_recursive{
   my $id2 = shift;
   my $gt2s = shift;		# searching for this one.
   my $max_bad_count = shift // die; # the max number of mismatching characters allowed along this branch
-  my $gt1s = $self->genotype(); # the genotype along the branch above this node.
-  my ($L1, $L2) = (length $gt1s, length $gt2s);
+  my $matchid_matchinfo = shift; # keys query id, values: string: [id_string n_to_spare] (n_to_spare is $max_bad_count - $bad_count)
+  my $n_gts_above = shift;
+  my $n_good_gts_above = shift;
+   my $gt1s = $self->genotype(); # the genotype along the branch above this node.
+  my ($L1, $L2) = (length $gt1s, length $gt2s); # $L1: gts on this branch (above node); $L2 gts left in query.
   $self->{tree}->{count_search_recursive_calls}++;
 
   assert ($L2 >= $L1) if DEBUG;
   assert ($L2 == $L1  or (keys %{$self->children()} > 0)) if DEBUG;
 
+  print STDERR "\n", "newick: ", $self->newick_recursive(), "\n";
+
   my $matching_id_string = '';
   my $bad_count = 0; # the number of mismatching characters so far along this branch.
   my $n_ok_characters = 0; # the number of characters before the bad_count gets too big.
+  my $n_good_pairs_to_limit = 0; # number of gt pairs (neither being MISSING_DATA) to exceed max_bad
   if (0) {  #  perl
     for my $i (0 .. $L1 - 1) {
       my ($g1, $g2) = (substr($gt1s, $i, 1), substr($gt2s, $i, 1));
@@ -179,29 +183,51 @@ sub search_recursive{
       }
     }
   } else {  #  using Inline::C
-    count_oks_and_mismatches_up_to_limit_C($gt1s, $gt2s, $max_bad_count, $n_ok_characters, $bad_count);
+    # $n_ok_characters in the following means the number of characters before $bad_count reaches $max_bad_count; it includes missing data
+    # n_ok_data_chars
+    count_oks_and_mismatches_up_to_limit_C($gt1s, $gt2s, $max_bad_count, # $n_gts_above, $n_good_gts_above,
+					   $n_ok_characters, $n_good_pairs_to_limit, $bad_count);
+    print STDERR "$id2   $L1 $L2   $n_gts_above $n_ok_characters ", $n_ok_characters + $n_gts_above,
+      "   $n_good_gts_above $n_good_pairs_to_limit ", $n_good_pairs_to_limit + $n_good_gts_above,
+      "   $max_bad_count  $bad_count ", $max_bad_count - $bad_count, "   ", join(',', @{$self->ids()}), "\n";
   }
 
   if ($n_ok_characters < $L1) { # this branch is ruled out.
+    print STDERR "# n_ok_characters ( $n_ok_characters ) < L ( $L1 ). branch ruled out   ids:  ", join(',', @{$self->ids()}), "\n";
   } else {
     assert ($n_ok_characters == $L1) if DEBUG; # ok so far, now examine children if any.
     if ($L2 == $L1) {	 # moment of truth - this must be a leaf node.
-      # these are identical genotypes!
-      $matching_id_string .= join(',', @{$self->ids()}) . ',';
+      print STDERR "$id2  :  ", join(',', @{$self->ids()}) . "   $max_bad_count $bad_count  ", $max_bad_count - $bad_count, "\n";
+      # these are identical genotypes (or rather differ by fewer than $max_bad_count!
+      my $this_node_id_string = join(',', @{$self->ids()});
+      my $n_to_spare = $max_bad_count - $bad_count;
+   #   print "qid:  $id2   matching ids:  ", join(',', @{$self->ids()}) , "\n";
+      for my $mid (@{$self->ids()}){
+#	print "mid: $mid \n";
+	$matchid_matchinfo->{$mid} = $n_to_spare;
+      }
+      $matching_id_string .= $this_node_id_string . ',';
     } elsif ($L2 > $L1) {	# Ok so far, but must look further ...
       substr($gt2s, 0, $n_ok_characters, '');
       my $g2head = substr($gt2s, 0, 1);
+      print STDERR "query gt2s: $gt2s  g2head: $g2head \n";
       if ($g2head eq MISSING_DATA  or  $bad_count < $max_bad_count) { # must check all subtrees
 	while ( my ($gh, $child) = each %{ $self->children() }) {
-	  $matching_id_string .= $child->search_recursive($id2, $gt2s, $max_bad_count - $bad_count);
+	  print STDERR "  br1. $gh ", join(',', @{$child->ids()}), "\n";
+	  $matching_id_string .= $child->search_recursive($id2, $gt2s, $max_bad_count - $bad_count, $matchid_matchinfo,
+							  $n_gts_above+$n_ok_characters, $n_good_gts_above+$n_good_pairs_to_limit);
 	}
       } else { # $g2head is 0,1, or 2; and $bad_count == $max_bad_count
 	for my $gh ($g2head, MISSING_DATA) {
 	  my $child = $self->children()->{$gh} // undef;
 	  if (defined $child) {
+	    print STDERR " br2. $gh ", join(',', @{$child->ids()}), "\n";
 	    if ($gh eq $g2head  or  $gh eq MISSING_DATA) {
-	      $matching_id_string .= $child->search_recursive($id2, $gt2s, $max_bad_count - $bad_count);
+	      $matching_id_string .= $child->search_recursive($id2, $gt2s, $max_bad_count - $bad_count, $matchid_matchinfo,
+							      $n_gts_above+$n_ok_characters, $n_good_gts_above+$n_good_pairs_to_limit);
 	    }
+	  }else{
+	    print STDERR "bad_count == max_bad_count, and no child with head eq gh $gh  ($g2head MISSING_DATA) \n";
 	  }
 	}
       }
@@ -221,8 +247,8 @@ sub check_node{
       $error += 10 if($self->depth() + length $chobj->genotype() != $chobj->depth());
       push @check_ids,  @{$chobj->ids()};
     }
-    my $ids_str = join(',', sort {$a <=> $b} @{$self->ids()});
-    my $check_ids_str = join(',', sort {$a <=> $b} @check_ids);
+    my $ids_str = join(',', sort  @{$self->ids()});
+    my $check_ids_str = join(',', sort  @check_ids);
     #    print "ids strs in check_node: [$ids_str]  [$check_ids_str] \n";
     $error += 100 if ($check_ids_str ne $ids_str);
   }
@@ -248,7 +274,7 @@ sub newick_recursive{
       $self->depth() . '_' . $self->genotype() . ':1';
   } else {			# leaf
     my $gstring = $self->genotype();
-    substr($gstring, 4, -4, '...') if(length $gstring > 8); # if long, only show beginning and end
+    substr($gstring, 4, -4, '...') if(length $gstring > 50); # if long, only show beginning and end
     my $depth = $self->depth();
     #	print "XXX ", join('-', @{$self->ids()}), "  $depth\n"; # if($depth != 200);
     $newick_str .= join('-', @{$self->ids()}) . '_' . $self->depth() . '_' . $gstring . ':1';
@@ -344,17 +370,53 @@ __C__
 
 #define MISSING_DATA 'X'
 
-  /* number of mismatches between to strings up to some max  */
-/* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
-void count_oks_and_mismatches_up_to_limit_C(char* str1, char* str2, int max_mismatches, SV* n_ok, SV* n_mm) {
-  int i = 0;
+#  /* number of mismatches between two strings up to some max  */
+# /* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
+  void count_oks_and_mismatches_up_to_limit_C(char* str1, char* str2, int max_mismatches, SV* n_before_limit, SV* n_good_to_limit, SV* n_mm){ //  SV* n_good_to_limit, SV* n_mm) {
+  int i = 0; // n_bef_lim;
+  int n_good_pair = 0; // n_good2lim; // count the number of good pairs (i.e. with neither being MISSING_DATA
   char c1;
   char c2;
   int mismatch_count = 0;
+// printf("%d %d %d \n", max_mismatches, n_bef_lim, n_good2lim);
   while(c1 = str1[i]) {
     if(c1 != MISSING_DATA){
       c2 = str2[i];
       if(c2 != MISSING_DATA){
+	n_good_pair++;
+        if (c1 != c2) {
+          mismatch_count++;
+        }
+        if(mismatch_count > max_mismatches){ // i not incremented
+        //  mismatch_count = -1;
+          break;
+        }
+      }
+    }
+    i++; //  i is now the number of characters which have been compared without exceeding the mismatch limit. 
+  } // end of while
+// printf("%s %s  %d %d %c\n", str1, str2, i, mismatch_count, MISSINGDATA);
+							  sv_setiv(n_before_limit, i);
+							  sv_setiv(n_good_to_limit, n_good_pair);
+							sv_setiv(n_mm, mismatch_count);
+}
+
+   /* number of mismatches between two strings up to some max  */
+/* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
+/*
+    void count_homozygous_oks_and_mismatches_up_to_limit_C(char* str1, char* str2, int max_mismatches, SV* n_ok, SV* n_mm) {
+  int i = 0;
+  int n_both_homozyg = 0;
+  char c1;
+  char c2;
+  int mismatch_count = 0;
+int zero2_20_count = 0;
+int both_homozygous_count = 0;
+  while(c1 = str1[i]) {
+    if(c1 != MISSING_DATA  and  c1 != '1'){
+      c2 = str2[i];
+      if(c2 != MISSING_DATA  and  c2 != '1'){
+        n_both_homozyg++;
         if (c1 != c2) {
           mismatch_count++;
         }
@@ -365,9 +427,12 @@ void count_oks_and_mismatches_up_to_limit_C(char* str1, char* str2, int max_mism
       }
     }
     i++;
-/* i is now the number of characters which have been compared without exceeding the mismatch limit. */
+//  i is now the number of characters which have been compared without exceeding the mismatch limit. 
   }
-// printf("%s %s  %d %d %c\n", str1, str2, i, mismatch_count, MISSINGDATA);
+ printf("%s %s  %d %d %c\n", str1, str2, i, mismatch_count, MISSINGDATA);
   sv_setiv(n_ok, i);
+  // sv_setiv(n_n
   sv_setiv(n_mm, mismatch_count);
 }
+
+*/
