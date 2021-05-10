@@ -15,19 +15,19 @@ use constant BIG_NUMBER => 1_000_000_000;
 # 0 = AA, 1 = Aa, 2 = aa.
 
 has id => (
-           isa => 'Int',
+           isa => 'Str',
            is => 'ro',
            required => 1,
           );
 
 has generation => (
-                   isa => 'Int',
+                   isa => 'Maybe[Int]',
                    is => 'ro',
                    default => sub { undef },
                   );
 
 has pedigree => (
-                 isa => 'Str',
+                 isa => 'Maybe[Str]',
                  is => 'ro',
                  default => sub { undef },
                 );
@@ -69,15 +69,32 @@ sub BUILD{
   my $a = [3,3,3,3,7,7];
  #   xxxxx($a->[0]);
 
-  my $counts = [0,0,0,0,0,0,0,0,0,0];
-  increment_specified_counts($counts, $a, scalar @$a);
-  print join(', ', @$counts), "\n";
+  # my $counts = [0,0,0,0,0,0,0,0,0,0];
+  # increment_specified_counts($counts, $a, scalar @$a);
+  # print join(', ', @$counts), "\n";
 }
 
 sub clone{
    my ($self, %params) = @_;
    return $self->meta->clone_object($self, %params);
+ }
+
+sub get_chunk{ # assemble the string consisting of the elements of $self->sequence specified in $chunk_indices.
+  my $self = shift;
+  my $chunk_indices = shift;
+  my $sequence = $self->sequence();
+  if(defined $chunk_indices){
+    my $chunk_string = '';
+    for my $i (@$chunk_indices){
+      $chunk_string .= substr($sequence, $i, 1);
+    }
+    return $chunk_string;
+  }else{
+    return $sequence;
+  }
 }
+
+
 
 
 sub distance{ # calculate distance between this genotype obj. and another
