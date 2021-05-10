@@ -47,7 +47,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
   GetOptions(
 	     'input_filename|fasta1|f1|stem=s' => \$input_filename,
 	     'fasta2|f2=s' => \$other_fasta,
-	     'error_prob=f' => \$error_prob,
+	     'error_prob=f' => \$error_prob, # not implemented
 
 	     'keep=i' => \$n_keep, # (min) number of dists to calculate for each search, based on number of chunk matches.
 	     'search!' => \$do_chunk_search,
@@ -154,7 +154,7 @@ use TomfyMisc qw ' fasta2seqon1line ';
 
     #########################################################################################
     print $output_string;
-    print "# construct data structure: ", $t1-$t0, "   candidates; matches_count: $matches_count  time: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "\n";
+    print "# time to construct data structure: ", $t1-$t0, "   candidates; matches_count: $matches_count  time: ", $t3-$t2, "   dists to candidates; count: $distance_calc_count  time: ", $t4-$t3, "  total time: ", $t4-$t0, "\n";
   }
 
 }				# end main
