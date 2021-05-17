@@ -8,7 +8,7 @@ use lib '/home/tomfy/Orthologger/lib/';
 use TomfyMisc qw ' fasta2seqon1line ';
 use constant MISSING_DATA => 'X';
 use Math::GSL::RNG  qw( :all );
-use Inline 'C';
+use Inline C => '../lib/inlinec.c';
 
 no warnings 'recursion';
 
@@ -34,19 +34,20 @@ use Genotype;
   my $newick_out = 0;
   my $rng_type = $gsl_rng_mt19937;
   my $rng_seed = undef;
-  my $p_missing = -1;		# prob. of missing data at each snp.
+  my $p_missing = 0;		# prob. of missing data at each snp.
   my $algorithm = 'both';	# 'quick' or 'slow' or 'both'
-  my $fasta2 = undef;
+  my $fasta2 = undef;		# query genotype sets fasta file.
   my $max_mismatches = 0;
   my $use_inline_C = 1;
   my $error_prob = 0;	    # add errors to data with this probability
-  my $chunk_size = undef;
+  my $chunk_size = 100000000;
   my $n_chunks = 1;
   my $sort_markers = 0;
+  my $min_usable_pairs_to_store = 2;
 
   GetOptions(
 	     'input_filename|fasta1|f1=s' => \$input_filename,
-	     'fasta2|f2=s' => \$fasta2,
+	     'fasta2|f2=s' => \$fasta2, # queries
 	     'show_all!' => \$show_all,
 	     'compact_tree!' => \$compact,
 	     'newick_out!' => \$newick_out,
@@ -60,11 +61,14 @@ use Genotype;
 	     'chunk_size=i' => \$chunk_size,
 	     'n_chunks=i' => \$n_chunks,
 	     'sort_markers!' => \$sort_markers,
+	     'min_to_store=i' => \$min_usable_pairs_to_store,
 	    );
+
+  # $max_mismatches--; # this is so the command line parameter is the number of mismatches 
 
   #  print STDERR "input file name: $input_filename\n";
 
-  my %exhaustive_eqpairs = ();	# 
+  #my %exhaustive_eqpairs = ();	# 
   my $ok = '?';
   # ############## set up the random number generator ##########################################
   if ($rng_type eq 'sys') {
@@ -80,10 +84,11 @@ use Genotype;
   print "# genotype input files: $input_filename  $fasta2 \n";
   print "# p_missing: $p_missing   error_prob: $error_prob \n";
   print "# max_mismatch: $max_mismatches \n";
-  print "# chunk_size: $chunk_size  n_chunks $n_chunks\n";
+  print "# chunk_size: ", (defined $chunk_size)? $chunk_size : 'undef',   "  n_chunks $n_chunks\n";
 
   ### #######  read in genotypes  ###############
   my ($t0, $t1, $t2, $t3, $t4, $t5);
+  my $t_output = 0;
   $t0 = gettimeofday();
 
   my @array_0123etc = ();
@@ -91,26 +96,29 @@ use Genotype;
   my $input_filename_stem = $input_filename;
   $input_filename_stem =~ s/\.\S+$//; # remove the part after the (last) '.'
 
-  my ($sequence_length, $gobjects1, $mindex_okcount1) = read_genotypes_from_fasta($input_filename, $the_rng, $p_missing, $error_prob);
-  for(0..$sequence_length-1){ $array_0123etc[$_] = $_; }
-  my ($sequence_length2, $gobjects2, $mindex_okcount2) = read_genotypes_from_fasta($fasta2, $the_rng, $p_missing, $error_prob);
-  my $n_accessions1 = scalar @$gobjects1;
-  my $n_accessions2 = scalar @$gobjects2;
+  my ($sequence_length, $id_gtsobj1, $mindex_okcount1) = read_genotypes_from_fasta($input_filename, $the_rng, $p_missing, $error_prob);
+  for (0..$sequence_length-1) {
+    $array_0123etc[$_] = $_;
+  }
+  my ($sequence_length2, $id_gtsobj2, $mindex_okcount2) = read_genotypes_from_fasta($fasta2, $the_rng, $p_missing, $error_prob);
+  my $n_accessions1 = scalar keys %$id_gtsobj1;
+  my $n_accessions2 = scalar keys %$id_gtsobj2;
   my $mindex_okcount = sum_hashes($mindex_okcount1, $mindex_okcount2);
   my @sorted_match_indices = ($sort_markers)?
     sort {$mindex_okcount->{$b} <=> $mindex_okcount->{$a} }
-    keys %$mindex_okcount # sort by okcount (high to low)
+    keys %$mindex_okcount	# sort by okcount (high to low)
     :
     @array_0123etc;
   my @chunk_index_arrayrefs = ();
-  
+
   my $n_chunks_used = $n_chunks;
   my $i_start = 0;
   for my $i_chunk (1..$n_chunks) {
     my $i_end = $i_start + $chunk_size - 1;
-    if ($i_end >= scalar @sorted_match_indices) {
+    # print STDERR "$i_end  ", scalar @sorted_match_indices, "\n";
+    if ($i_end >= $#sorted_match_indices) {
       $i_end = $#sorted_match_indices;
-	my @chunk_indices = @sorted_match_indices[$i_start .. $i_end];
+      my @chunk_indices = @sorted_match_indices[$i_start .. $i_end];
       push @chunk_index_arrayrefs, \@chunk_indices;
       $n_chunks_used = $i_chunk;
       last;
@@ -121,145 +129,191 @@ use Genotype;
     $i_start += $chunk_size;
   }
   print "# n_chunks_used: $n_chunks_used \n";
+
   
+
   $t1 = gettimeofday();
   #  print STDERR "time to read input, construct genotype objects: ", $t1-$t0, " sec.\n";
 
   ### do exhaustive comparison: ###
-  my $ex_str = '';
+  my %exhaust_chunk_results = ();
   if ($algorithm ne 'quick') {
-    my $N = scalar @$gobjects1;
-    while (my($i, $g1) = each @$gobjects1) {
-      for my $j (0 .. (@$gobjects2-1)) {
-	my $g2 = $gobjects2->[$j];
-	my $n_mismatches;
-	# if(0){
-	#   my ($n_ok, $n_mm); # = $g1->count_mismatches_up_to_limit($g2, $max_mismatches); # inline C
-	#   #count_mismatches_up_to_limit($g2, $max_mismatches); # inline C
-	#   count_oks_and_mismatches_up_to_limit_C($g1->sequence(), $g2->sequence(), $max_mismatches, $n_ok, $n_mm);
-	#   #  print "$i $j $n_ok $n_mm \n";
-	#   $n_mismatches = $n_mm;
-	# }else{
-	$n_mismatches = count_mismatches_up_to_limit_C($g1->sequence(), $g2->sequence(), $max_mismatches);
-	#	}
-	if ($n_mismatches >= 0) {
-	  $exhaustive_eqpairs{$g2->id()} .= $g1->id() . ',';
-	} else {		# nuthin
-	}
+    my $N2 = scalar keys %$id_gtsobj2;
+    while (my($i_chunk, $chunk_indices) = each @chunk_index_arrayrefs) {
+      my %qid_matchidinfo = ();
+      #   $for my $j (0 .. ($N2-1)) {
+      #	$my $g2 = $go->[$j];
+      while (my ($qid, $q_gtsobj) = each %$id_gtsobj2) {
+	my $mid_matchinfo = {};
+	$mid_matchinfo = exhaustive_search_1query($id_gtsobj1, $q_gtsobj, $chunk_indices, $max_mismatches);
+	# while(my($mid, $minfo) = each %$mid_matchinfo){
+	#   print STDERR "X $i_chunk  $qid $mid [$minfo]\n";
+	# }
+	$qid_matchidinfo{$q_gtsobj->id()} = $mid_matchinfo;
       }
-    }
-    $t2 = gettimeofday();
-    #    print STDERR "time to do N*M genotype-genotype comparisons: ", $t2-$t1, " sec.\n";
-
-    my @sorted_ids = sort  keys %exhaustive_eqpairs;
-    for my $anid (@sorted_ids) {
-      my $s = $exhaustive_eqpairs{$anid};
-      $s =~ s/,\s*$//;
-      my @eeks = split(',', $s);
-      @eeks = sort  @eeks;
-      $ex_str .=  "$anid  " . join(",", @eeks) . "\n" if(scalar @eeks > 0);
+      $exhaust_chunk_results{$i_chunk} = \%qid_matchidinfo;
     }
   }
   $t2 = gettimeofday();
-  #### end of exhaustive ####
+  #### end of exhaustive search ####
 
-  my $gtree = undef;
-  my ($t2_3, $t3_4, $t2_4) = ('---', '---', '---');
+ 
   #### construct tree ####
-  my $quick_str = '';
-  if ($algorithm ne 'slow') {
-    #   print $sequence_length // 'XXX', " \n";
+  my $n_nogood_total = 0; # number of queries for which exhaustive and tree searches disagree.
+  my ($t_treeconstruct, $t_treesearch, $t_check) = (0, 0, 0);
+  if ($algorithm ne 'slow') {	# search using trees
+    my %qid_mid_sums;
     while (my($i_chunk, $chunk_indices) = each @chunk_index_arrayrefs) {
-      print STDERR "\n", "# doing chunk $i_chunk\n";
-      my $gtree = GenotypeTree->new( { depth => $sequence_length } );
-      for my $gobj (@$gobjects1) {
-	$gtree->add_genotype($gobj, $chunk_indices);
+      print STDERR "# doing chunk $i_chunk\n";
+      my $ta = gettimeofday();
+      my $gtree = GenotypeTree->new( { depth => scalar @$chunk_indices } );
+      # for my $gobj (@$gobjects1) {
+      while (my ($qid, $gobj1) = each %$id_gtsobj1) {
+	$gtree->add_genotype($gobj1, $chunk_indices);
       }
-      $t3 = gettimeofday();
-      $t2_3 = $t3-$t2;
+      $t_treeconstruct += gettimeofday - $ta;
+      my %ngoodbad_count = ();
       #### search in tree for sequences from $fasta2 file ####
-      for my $gobj2 (@$gobjects2) {
-	$quick_str .= $gobj2->id() . "  " . $gtree->search($gobj2, $max_mismatches, $chunk_indices) . "\n";
-      }
-      #print "exhaust str: [\n$ex_str]\n";
-      # print "quick str:   [\n$quick_str]\n";
-      $t4 = gettimeofday();
-      $t3_4 = $t4 - $t3;
-      $t2_4 = $t4 - $t2;
-      #     print "time to search genotype tree: ", $t4-$t3, " sec.\n";
 
-      #    print "root ids:  ", $gtree->root()->id_as_string(), "\n";
-      print $gtree->as_newick(), "\n\n" if($newick_out);
-  
+      # for my $gobj2 (@$gobjects2) {
+      while (my ($id2, $gobj2) = each %$id_gtsobj2) {
+	# my $id2 = $gobj2->id();
+	$qid_mid_sums{$id2} = {} if(! exists $qid_mid_sums{$id2});
+	my $tb = gettimeofday();
+	my $quick_mid_matchinfo = $gtree->search($gobj2, $chunk_indices, $max_mismatches, $min_usable_pairs_to_store);
+	# matchinfo is  $max_bad_count  $bad_count  ($n_gts_above+$n_ok_characters)   $n_good_to_exceed_max_bad_count";
+	while (my($mid, $minfo) = each %$quick_mid_matchinfo) {
+	  my ($n_mms, $n_ok_before, $N) = split(" ", $minfo);
+	  $qid_mid_sums{$id2}->{$mid} = [0, 0, 0] if(! exists $qid_mid_sums{$id2}->{$mid});
+	  $qid_mid_sums{$id2}->{$mid}->[0] += $n_mms; # number of mismatches found, (sum over chunks)
+	  $qid_mid_sums{$id2}->{$mid}->[1] += $N; # number of usable gt pairs (i.e. with neither being missing data) compared (sum over chunks)
+	  $qid_mid_sums{$id2}->{$mid}->[2]++; # number of chunks with at least $min_to_store usable pairs compared.
 
-      #   print STDERR "time to do search tree for N genotypes: ", $t4-$t3, " sec.\n";
-
-    } # end of loop over chunks
-  } 
-  if ($algorithm eq 'both') {
-    # check that quick gives same matches as exhaustive
-    my %exedges = ();
-    my %qedges = ();
-    my @exs = split("\n", $ex_str);
-    my @qs = split("\n", $quick_str);
-
-    for my $line (@exs) {
-      my ($id1, $id2str) = split(' ', $line);
-      my @id2s = split(',', $id2str);
-      for my $id2 (@id2s) {
-	my $edge_id = ($id1 lt $id2)? $id1 . " " . $id2 : $id2 . " " . $id1;
-	$exedges{$edge_id} = 1;
-      }
-    }
-    for my $line (@qs) {
-      my ($id1, $id2str) = split(' ', $line);
-      my @id2s = split(',', $id2str);
-      for my $id2 (@id2s) {
-	my $edge_id = ($id1 lt $id2)? $id1 . " " . $id2 : $id2 . " " . $id1;
-	$qedges{$edge_id} = 1;
-      }
-    }
-
-    my $bad_edge = undef;
-    for (keys %exedges) {
-      if (!exists $qedges{$_}) {
-	#	$ok = 'not equal';
-	$bad_edge = $_;
-	last;
-      }
-    }
-    if (!defined $bad_edge) {
-      for (keys %qedges) {
-	if (!exists $exedges{$_}) {
-	  #	$ok = 'not equal';
-	  $bad_edge = $_;
-	  last;
+	  #  print STDERR "T $i_chunk  $id2 $mid [$minfo]\n";
 	}
-      }
-    }
-    $ok = (defined $bad_edge)? 'N' : 'Y';
-  }
-  $t5 = gettimeofday();
 
-  if ($algorithm eq 'both') {
-    print STDERR "#     input,gobjs      N*M       treeconstr    search     constr&search   check        total    agree? \n";
-    printf(STDERR "# %12.3f %12.3f %12.3f %12.3f %12.3f %12.3f %12.3f      %s\n",
-	   $t1-$t0, $t2-$t1, $t2_3, $t3_4, $t2_4, $t5-$t4, $t5-$t0, $ok);
-  } elsif ($algorithm eq 'slow') {
-    print STDERR "#     input,gobjs      N*M         total  \n";
-    printf(STDERR "# %12.3f %12.3f %12.3f \n", $t1-$t0, $t2-$t1, $t5-$t0);
-  } else {			#  quick only 
-    print STDERR "#     input,gobjs   treeconstr    search     constr&search   total\n";
-    printf(STDERR "# %12.3f %12.3f %12.3f %12.3f %12.3f \n",
-	   $t1-$t0, $t2_3, $t3_4, $t2_4, $t5-$t0);
-  }
-  #  my $n_search = @$gobjects2;
-  #  print "# search_recursive calls: ", $gtree->count_search_recursive_calls(), 
-  #    "  $n_search  ", $gtree->count_search_recursive_calls()/$n_search, "\n" if(defined $gtree);
-} # end main
+	my $tc = gettimeofday();
+	$t_treesearch += $tc - $tb;
+
+	####### Check whether match info can predict best agmrs ##############
+	#	while(my($qid, $mid_sums) = each %qid_mid_sums){
+	#	  print STDERR
+	#	}
+
+	######## compare tree results with exhaustive results: #####################
+	if ($algorithm eq 'both') {
+	#  while(my($x, $y) = each $exhaust_chunk_results->{0}
+	  my ($ok_count, $nogood_count) = (0, 0);
+	  while (my($mid, $v) = each %$quick_mid_matchinfo) {
+	    my $xv = $exhaust_chunk_results{$i_chunk}->{$gobj2->id()}->{$mid} // 'undef';
+	    if ($xv eq $v) {
+	      $ok_count++;
+	    } else {
+	      print "match id: $mid  exhaustive: $xv  tree: $v \n";
+	      $nogood_count++;
+	    }
+	  }
+
+	  $ngoodbad_count{"$ok_count    $nogood_count"}++;
+	  $n_nogood_total += $nogood_count;
+	}
+	$t_check += gettimeofday - $tc;
+      }
+
+      print "# chunk  ngood nbad  count \n" if($i_chunk == 0);
+      while (my($ngb, $count) = each %ngoodbad_count) {
+	print "#   $i_chunk     $ngb    $count \n";
+      }
+
+      print $gtree->as_newick(), "\n\n" if($newick_out);
+
+    }				# end of loop over chunks
+
+    # report results
+    my %mid_agmr = ();
+    my %mid_agmr_fom = ();
+    my %mid_hgmr = ();
+    my %mid_hgmr_fom = ();
+    my $td = gettimeofday();
+    while (my($qid, $mid_sums) = each %qid_mid_sums) {
+      #print STDERR "$qid \n";
+      my $q_sequence = $id_gtsobj2->{$qid}->sequence();
+      my $neitherXnor1_indices = neitherXnor1_indices($q_sequence);
+      while (my($mid, $sums) = each %$mid_sums) {
+	my $m_sequence = $id_gtsobj1->{$mid}->sequence();
+#	print STDERR "qid: $qid   ", substr($q_sequence, 0, 30), "\n";
+#	print STDERR "mid:   $mid   ", substr($m_sequence, 0, 30), "\n";
+	#	my $agmr = agmr($q_sequence, $m_sequence);
+#	my $perl_hgmr = hgmr($q_sequence, $m_sequence);
+	
+	my ($agmr_n, $agmr_d, $hgmr_n, $hgmr_d) = (0, 0, 0, 0);
+#	agmr_C($q_sequence, $m_sequence, $agmr_n, $agmr_d);
+#	hgmr_C($q_sequence, $m_sequence, $hgmr_n, $hgmr_d);
+#        hgmr_Cx($q_sequence, $neitherXnor1_indices, $m_sequence, $hgmr_n, $hgmr_d);
+	agmr_hgmr_C($q_sequence, $m_sequence, $agmr_n, $agmr_d, $hgmr_n, $hgmr_d);
+	my $agmr = ($agmr_d > 0)? $agmr_n/$agmr_d : -1;
+	my $hgmr = ($hgmr_d > 0)? $hgmr_n/$hgmr_d : -1;
+	
+#	my ($hgmr1_n, $hgmr1_d) = (0, 0);
+#	hgmr_C($q_sequence, $m_sequence, $hgmr1_n, $hgmr1_d);
+#	my $hgmr1 = ($hgmr1_d > 0)? $hgmr1_n/$hgmr1_d : -1;
+	# query_id  match_id   n_mismatches  n_usable_pairs_compared  n_chunks_info_stored
+	my ($total_stored_mms, $n_usable_compared, $n_stored_chunks) = @$sums;
+	my $n_unstored_chunks = $n_chunks_used - $n_stored_chunks;
+	my $total_mms = $total_stored_mms + $n_unstored_chunks*$max_mismatches;
+	my $denom = $n_usable_compared + $n_unstored_chunks*($min_usable_pairs_to_store-1);
+	my $fom = ($denom > 0)? $total_mms/$denom : 2; #figure of merit: small fom should imply small agmr.
+	$mid_agmr{$mid} = $agmr;
+	$mid_agmr_fom{$mid} = $fom;
+	print STDERR "   $fom $agmr $hgmr \n"
+	# printf( STDERR "  %s %2i %3i %7.3f %1i  %2i %3i  %8.4f  %8.5f\n",
+	# 	$mid, $total_stored_mms, $n_usable_compared, (($n_usable_compared)? $total_stored_mms/$n_usable_compared : -1),
+	# 	$n_stored_chunks, $total_mms, $denom, $fom, $agmr);
+      }
+      my @sorted_mids_agmr = sort {$mid_agmr{$a} <=> $mid_agmr{$b}} keys %mid_agmr;
+      my @sorted_mids_fom = sort {$mid_agmr_fom{$a} <=> $mid_agmr_fom{$b}} keys %mid_agmr_fom;
+      #   print STDERR "AAAA: ", join(",", @sorted_mids_agmr), "\n";
+      #   print STDERR "FFFF: ", join(",", @sorted_mids_fom), "\n";
+      
+      # for (@sorted_mids_agmr[0..8]) {
+      # 	printf( STDERR "%24s %8.6f  ", $_, $mid_agmr{$_});
+      # }
+      # print STDERR "\n";
+      # for (@sorted_mids_fom[0..8]) {
+      # 	printf( STDERR "%24s %8.6f  ", $_, $mid_agmr_fom{$_});
+      # }
+      # print STDERR "\n";
+      
+    }
+    $t_output += gettimeofday() - $td;
+  }				### end of tree search ###
+
+  print STDERR "#     input,gobjs      N*M       treeconstr    search        check       output    OK?\n";
+  printf(STDERR "# %12.3f %12.3f %12.3f %12.3f %12.3f %12.3f   %3s\n",
+	 $t1-$t0, $t2-$t1, $t_treeconstruct, $t_treesearch, $t_check, $t_output, ($algorithm eq 'both')? (($n_nogood_total == 0)? 'Y' : 'N') : '-' );
+}				# end main
 
 
 ####  ############### subroutines ################## ####
+sub notX_indices{
+  my $sequence = shift;
+  my @notxindices = ();
+    for(my $i=0; $i< length $sequence; $i++){
+      push @notxindices, $i if(substr($sequence, $i, 1) ne MISSING_DATA);
+    }
+  return \@notxindices;
+}
+
+sub neitherXnor1_indices{
+  my $sequence = shift;
+  my @notx1indices = ();
+  for(my $i=0; $i< length $sequence; $i++){
+    my $gt = substr($sequence, $i, 1);
+    next if($gt eq '1');
+      push @notx1indices, $i if($gt ne MISSING_DATA);
+    }
+  return \@notx1indices;
+}
 
 sub lose_data{ # with prob. $p_missing replace snp genotypes with MISSING_DATA
   my $sequence = shift;
@@ -375,7 +429,7 @@ sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an a
 
   #  print STDERR "input file name: [$input_filename]\n";
   my %count_errors = ();
-  my @genotype_objects = ();
+  my %id_gtsobj = ();
   my $sequence_length = undef;
   my @fasta_lines = split ("\n", TomfyMisc::fasta2seqon1line($input_string));
   while (@fasta_lines) {
@@ -406,12 +460,12 @@ sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an a
     }
 
     #  print STDERR "after:  $sequence\n";
-    push @genotype_objects, Genotype->new(
-					  { id => $id,
-					    generation => $generation,
-					    pedigree => $pedigree,
-					    sequence => $sequence }
-					 );
+    $id_gtsobj{$id} = Genotype->new(
+				    { id => $id,
+				      generation => $generation,
+				      pedigree => $pedigree,
+				      sequence => $sequence }
+				   );
     # }
   }
   # while (my($k, $v) = each %count_errors) {
@@ -422,7 +476,7 @@ sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an a
   #   my $i = $sorted_marker_indices[$j];
   #     print STDERR "i, okcount: $i ", $mindex_okcount{$i}, "\n";
   #   }
-  return ($sequence_length, \@genotype_objects, \%mindex_okcount);
+  return ($sequence_length, \%id_gtsobj, \%mindex_okcount);
 }
 
 sub sum_hashes{
@@ -435,6 +489,71 @@ sub sum_hashes{
   return $hr1;
 }
 
+sub exhaustive_search_1query{
+  my $db_gts_objs = shift;	# array ref of Genotypes objects
+  my $q_gts_obj = shift;
+  my $index_arrayref = shift;
+  my $max_mismatches = shift;
+  my $q_sequence = $q_gts_obj->get_chunk($index_arrayref); # $chunk_index_arrayrefs[0]);
+  my %mid_matchinfo = ();
+  while (my($i, $db_gts_obj) = each %$db_gts_objs) {
+    # my $sequence1 = $db_gt_obj->get_chunk($index_arrayref);
+    my ($n_pairs_compared, $n_usable_pairs_compared, $mismatch_count) = (0, 0, 0);
+    #GenotypeTreeNode::
+    count_oks_and_mismatches_up_to_limit_C(
+							     $db_gts_obj->get_chunk($index_arrayref),
+							     $q_sequence,
+							     # $sequence1,
+							     # $sequence2,
+							     $max_mismatches, 0,
+							     $n_pairs_compared, $n_usable_pairs_compared, $mismatch_count);
+
+    $mid_matchinfo{$db_gts_obj->id()} = "$mismatch_count  $n_pairs_compared  $n_usable_pairs_compared";
+  }
+  return \%mid_matchinfo;
+}
+
+sub agmr{
+  my $gts1 = shift;
+  my $gts2 = shift;
+  my ($L1, $L2) = (length $gts1, length $gts2);
+  die "lengths $L1, $L2 should be equal!" if($L1 != $L2);
+  my ($numer, $denom) = (0, 0);
+  for (my $i = 0; $i < $L1; $i++) {
+    my $c1 = substr($gts1, $i, 1);
+    if ($c1 ne 'X') {
+      my $c2 = substr($gts2, $i, 1);
+      if ($c2 ne 'X') {
+	$denom++;
+	$numer++ if($c1 ne $c2);
+      }
+    }
+  }
+#   print "PERL: $numer $denom \n";
+  return ($denom>0)? $numer/$denom : -1;
+}
+
+sub hgmr{
+  my $gts1 = shift;
+  my $gts2 = shift;
+  my ($L1, $L2) = (length $gts1, length $gts2);
+  die "lengths $L1, $L2 should be equal!" if($L1 != $L2);
+  my ($numer, $denom) = (0, 0);
+  for (my $i = 0; $i < $L1; $i++) {
+    my $c1 = substr($gts1, $i, 1);
+    if ($c1 ne 1  and  $c1 ne 'X') {
+      my $c2 = substr($gts2, $i, 1);
+      if ($c2 ne 1  and  $c2 ne 'X') {
+#	if($c1 ne 1  and $c2 ne 1){
+	$denom++;
+	$numer++ if($c1 ne $c2);
+      #}
+      }
+    }
+  }
+#  print "PERL: hgmr  $numer $denom \n";
+  return ($denom>0)? $numer/$denom : -1;
+}
 
 __DATA__
 
@@ -443,35 +562,111 @@ __DATA__
 __C__
 
   #define MISSING_DATA 'X'
+  void agmr_C(char* str1, char* str2, SV* numer, SV* denom){
+    char c1;
+    char c2;
+    int i=0;
+    int n=0;
+    int d=0;
+    while(c1 = str1[i]){
+      if(c1 != MISSING_DATA){
+	c2 = str2[i];
+	if(c2 != MISSING_DATA){
+	  d++;
+	  if(c1 != c2){
+	    n++;
+	  }
+	}
+      }
+      i++;
+    }
+ //   printf("C:    %i %i \n", n, d);
+    sv_setiv(numer, n);
+    sv_setiv(denom, d);
+  }
 
-  /* number of mismatches between two strings up to some max  */
- /* returns 0,1,2,...,max_mismatches or -1 if there are more mismatches */
-int count_mismatches_up_to_limit_C(char* str1, char* str2, int max_mismatches) {
-  int i = 0;
-  char c1;
-  char c2;
-  int mismatch_count = 0;
-  while(c1 = str1[i]) {
-    if(c1 != MISSING_DATA){
-      c2 = str2[i];
-      if(c2 != MISSING_DATA){
-        if (c1 != c2) {
-          mismatch_count++;
-        }
-        if(mismatch_count > max_mismatches){
-          return -1; // indicates number of mismatches > limit
-}
-}
-}
-  i++;
-}
-  return mismatch_count;
+void hgmr_Cx(char* str1, AV* qindices, char* str2, SV* numer, SV* denom){ // slower!
+  /* qindices is array of the indices for which str1 (query) is homozygous */
+
+    char c1;
+    char c2;
+//    int i=0;
+    int n=0;
+  int d=0;
+  int L = av_len(qindices);
+  for(int i=0; i<L; i++){
+  //  v = ;
+      int idx = SvNV( * av_fetch( qindices, i, 0) );
+      c1 = str1[idx];
+      c2 = str2[idx];
+      if((c2 != '1') && (c2 != MISSING_DATA)){
+	d++;
+	if(c1 != c2){
+	  n++;
+	}
+      }
+    }
+ //   printf("C:    %i %i \n", n, d);
+    sv_setiv(numer, n);
+    sv_setiv(denom, d);
 }
 
-  // lines to use in alternative way of get multiple values back from Inline::C function
-  /* Inline_Stack_Vars;
-Inline_Stack_Reset;
-Inline_Stack_Push(sv_2mortal(newSViv(i)));
-Inline_Stack_Push(sv_2mortal(newSViv(mismatch_count)));
-Inline_Stack_Done; */
+void hgmr_C(char* str1, char* str2,
+	    SV* numer, SV* denom){
+    char c1;
+    char c2;
+    int i=0;
+    int n=0;
+    int d=0;
+    while(c1 = str1[i]){
+      if((c1 != '1') && (c1 != MISSING_DATA)){
+	c2 = str2[i];
+	if((c2 != '1') && (c2 != MISSING_DATA)){
+	  d++;
+	  if(c1 != c2){
+	    n++;
+	  }
+	}
+      }
+      i++;
+    }
+    sv_setiv(numer, n);
+    sv_setiv(denom, d);
+  }
+
+void agmr_hgmr_C(char* str1, char* str2, SV* a_numer, SV* a_denom, SV* h_numer, SV* h_denom){
+    char c1;
+    char c2;
+    int i=0;
+    int n_a=0;
+    int r_a=0;
+    int n_h=0;
+    int r_h=0;
+    while(c1 = str1[i]){
+      if(c1 != MISSING_DATA){
+	c2 = str2[i];
+	if(c2 != MISSING_DATA){
+
+	  if(c1 != c2){
+	    n_a++;
+	     if((c1 != '1')  &&  (c2 != '1')){
+	      n_h++;
+	    }
+	  }else{
+	    r_a++;
+	     if((c1 != '1')  &&  (c2 != '1')){
+	      r_h++;
+	    }
+	  }
+
+	}
+      }
+      i++;
+    }
+ //   printf("C:    %i %i \n", n, d);
+    sv_setiv(a_numer, n_a);
+    sv_setiv(a_denom, r_a+n_a);
+    sv_setiv(h_numer, n_h);
+    sv_setiv(h_denom, r_h+n_h);
+  }
 
