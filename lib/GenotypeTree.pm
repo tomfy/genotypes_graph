@@ -28,7 +28,7 @@ has count_search_recursive_calls => (
                                      isa => 'Int',
                                      is => 'ro',
                                      default => 0,
-);
+				    );
 
 # class to represent a tree of genotypes
 
@@ -44,7 +44,7 @@ sub add_genotype{
   my $gobj = shift;
   my $chunk_indices = shift // undef;
   my $genotype_string = $gobj->get_chunk($chunk_indices); #
-  print STDERR $gobj->id(), "   $genotype_string \n";
+  # print STDERR $gobj->id(), "   $genotype_string \n";
   my $id = $gobj->id();
   my $root = $self->root();
   $root->add_id($id);
@@ -55,54 +55,56 @@ sub add_genotype{
     my $new_node = GenotypeTreeNode->new( {tree => $self,
 					   parent => $root,
 					   depth => length $genotype_string,
-					   genotype => $genotype_string, 
+					   genotype => $genotype_string,
 					   ids => [$id] } );
     $root->children()->{$ghead} = $new_node;
   }
   $self->size($self->size()+1);
-  #  print "done adding genotype.\n\n";
-  # exit if($self->size() > 20);
 }
 
 sub search{
   my $self = shift;
   my $gobj = shift;
+   my $chunk_indices = shift // undef;
   my $max_bad_count = shift // die;
-  my $chunk_indices = shift // undef;
+ my $min_to_store = shift; # if length (number of pairs with no missing data) before max_bad_count exceeded is < this, do not store info
   my $root = $self->root();
-  my $genotype_string = $gobj->get_chunk($chunk_indices); # sequence();
+  my $genotype_string = $gobj->get_chunk($chunk_indices); # query genotype string
 
-  print STDERR "\n", "newick: ", $root->newick_recursive(), "\n";
+  # print STDERR "\n", "newick: ", $root->newick_recursive(), "\n";
 
   my $ghead = substr($genotype_string, 0, 1);
-  my $matching_ids = '';
+  #  my $matching_ids = '';
   my $matchid_matchinfo = {};
-  if ($ghead eq MISSING_DATA  or  ($max_bad_count > 0)) {
-    while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
-      $matching_ids .= $child->search_recursive($gobj->id(),
-						$genotype_string, #$gobj->sequence(),
-						$max_bad_count, $matchid_matchinfo, 0, 0);
-    }
-  } else {
-    while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
-      if ($gh eq $ghead  or  $gh eq MISSING_DATA) {
-	$matching_ids .= $child->search_recursive($gobj->id(),
-						  $genotype_string, #$gobj->sequence(),
-						  $max_bad_count, $matchid_matchinfo, 0, 0);
-      }
-    }
-  }
-  $matching_ids =~ s/,\s*$//;
- # print STDERR $gobj->id(), "   matches:  $matching_ids \n";
-  my @sorted_ids = sort  split(',', $matching_ids);
-  print "qid: ", $gobj->id(), "\n";
-  while(my ($k, $v) = each %{$matchid_matchinfo}){
-    print "   match id: $k    $v \n";
-  }
+  my $n_gts_above = 0;
+  my $n_good_gts_above;
 
-  return( scalar @sorted_ids > 0)?
-    # $gobj->id() . "  " .
-    join(",", @sorted_ids) : '';
+  while (my($gh, $child) = each %{$root->children()}) {	# search all children of root if 1st char is missing data.
+    $child->search_recursive(
+			     $genotype_string, #$gobj->sequence(),
+			     $max_bad_count, $min_to_store, 0, $matchid_matchinfo, 0, 0);
+  }
+  # if ( 1  or  ($ghead eq MISSING_DATA  or  ($max_bad_count > 0)) ) {
+  #   my $chs = $root->children();
+  #   # print STDERR "ROOT children: ", join(" ; ", map("$_ " . join(',', @{$chs->{$_}->ids()}), keys %$chs)), "\n";
+  #   while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
+  #     $matching_ids .= $child->search_recursive($gobj->id(),
+  # 						$genotype_string, #$gobj->sequence(),
+  # 						$max_bad_count, 0, $matchid_matchinfo, 0, 0);
+  #   }
+  # } else {
+  #   while (my($gh, $child) = each %{$root->children()}) { # search all children of root if 1st char is missing data.
+  #     if ($gh eq $ghead  or  $gh eq MISSING_DATA) {
+  # 	$matching_ids .= $child->search_recursive($gobj->id(),
+  # 						  $genotype_string, #$gobj->sequence(),
+  # 						  $max_bad_count, 0, $matchid_matchinfo, 0, 0);
+  #     }
+  #   }
+  # }
+  # $matching_ids =~ s/,\s*$//;
+  # my @sorted_ids = sort  split(',', $matching_ids);
+  # my $sorted_ids_str = (scalar @sorted_ids > 0)? join(",", @sorted_ids) : '';
+  return $matchid_matchinfo;
 }
 
 sub as_newick{
