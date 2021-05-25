@@ -2,7 +2,7 @@
 
 /* number of mismatches between two strings up to some max  */
 /* returns 0,1,2,...,max_mismatches */
-void count_oks_and_mismatches_up_to_limit_C(char* str1, char* str2,
+void count_mismatches_C(char* str1, char* str2,
 					    int max_mismatches, int mismatches_so_far,
 					    SV* n_before_limit, SV* n_usable_to_limit, SV* n_mm){
   int i = 0;
@@ -30,7 +30,7 @@ void count_oks_and_mismatches_up_to_limit_C(char* str1, char* str2,
   sv_setiv(n_mm, mismatch_count);
 }
 
-void count_homozygous_oks_and_mismatches_up_to_limit_C(char* str1, char* str2,
+void count_homozygous_mismatches_C(char* str1, char* str2,
 						       int max_mismatches, int mismatches_so_far,
 						       SV* n_before_limit, SV* n_usable_to_limit, SV* n_mm){
   int i = 0;
