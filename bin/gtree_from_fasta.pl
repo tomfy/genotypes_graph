@@ -47,11 +47,11 @@ use Genotype;
 	     'fasta1|f1=s' => \$input_filename,
 	     'fasta2|f2=s' => \$query_fasta, # queries
 	     'sort_markers!' => \$sort_markers,
-	      'chunk_size=i' => \$chunk_size,
+	     'chunk_size=i' => \$chunk_size,
 	     'n_chunks=i' => \$n_chunks,
 	     'max_mismatch=i' => \$max_mismatches,
 	     'min_to_store=i' => \$min_usable_pairs_to_store,
-	      'check_prob=f' => \$check_prob,
+	     'check_prob=f' => \$check_prob,
 	     'gmr_prob=f' => \$gmr_prob,
 
 	     'newick_out!' => \$newick_out,
@@ -82,34 +82,34 @@ use Genotype;
   ### #######  read in genotypes  ###############
   $t_start = gettimeofday();
 
-  my @array_0123etc = ();
-
   my $input_filename_stem = $input_filename;
   $input_filename_stem =~ s/\.\S+$//; # remove the part after the (last) '.'
 
   my ($sequence_length, $id_gtsobj1, $mindex_okcount1) = read_genotypes_from_fasta($input_filename, $the_rng, $p_missing, $error_prob);
-  for (0..$sequence_length-1) {
-    $array_0123etc[$_] = $_;
-  }
-  @array_0123etc = shuffle(@array_0123etc);
+
   my ($query_sequence_length, $qid_gtsobj, $qmindex_okcount) = read_genotypes_from_fasta($query_fasta, $the_rng, $p_missing, $error_prob);
+
   my ($n_db, $n_query) = (scalar keys %$id_gtsobj1, scalar keys %$qid_gtsobj);
   my $n_accessions1 = scalar keys %$id_gtsobj1;
   my $n_accessions2 = scalar keys %$qid_gtsobj;
   my $mindex_okcount = sum_hashes($mindex_okcount1, $qmindex_okcount);
+
+  my @array_0123etc = ();
+
+  for (0..$sequence_length-1) {
+    $array_0123etc[$_] = $_;
+  }
+  @array_0123etc = shuffle(@array_0123etc);
   my @sorted_match_indices = ($sort_markers)?
     sort {$mindex_okcount->{$b} <=> $mindex_okcount->{$a} }
     keys %$mindex_okcount	# sort by okcount (high to low)
     :
     @array_0123etc;
 
-#  print STDERR join("  ", map($mindex_okcount->{$_}, @sorted_match_indices)), "\n";
-  #exit;
-
-  my $stride = 1000;
-  for(my $i = 0; $i < scalar @sorted_match_indices; $i += $stride){
-    my $iend = min($i+$stride-1, $#sorted_match_indices);
-    print STDERR "i, iend: $i $iend \n";
+  my $block_size = 1000;
+  for (my $i = 0; $i < scalar @sorted_match_indices; $i += $block_size) {
+    my $iend = min($i+$block_size-1, $#sorted_match_indices);
+    print STDERR "block $i; i, iend: $i $iend \n";
     @sorted_match_indices[$i..$iend] = shuffle(@sorted_match_indices[$i..$iend]);
   }
   my @chunk_index_arrayrefs = ();
@@ -144,14 +144,10 @@ use Genotype;
   if ($check_prob > 0) {
     while (my ($qid, $q_gtsobj) = each %$qid_gtsobj) {
       my $ex_mid_matchinfosum = {};
-   #   while (my($i_chunk, $chunk_indices) = each @chunk_index_arrayrefs) {
-	my $mid_matchinfo = {};
-	(my $count, $mid_matchinfo) = exhaustive_search_1query($id_gtsobj1, $q_gtsobj, \@chunk_index_arrayrefs, $max_mismatches, $the_rng, $check_prob, $ex_mid_matchinfosum, $min_usable_pairs_to_store);
-	$n_compare_exh += $count;
-    #  }
+      my $mid_matchinfo = {};
+      (my $count, $mid_matchinfo) = exhaustive_search_1query($id_gtsobj1, $q_gtsobj, \@chunk_index_arrayrefs, $max_mismatches, $the_rng, $check_prob, $ex_mid_matchinfosum, $min_usable_pairs_to_store);
+      $n_compare_exh += $count;
       $Ex_qid_matchidinfosum{$qid} = $ex_mid_matchinfosum;
-      #    $exhaust_chunk_results{$i_chunk} = Ex_qid_matchidinfo;
-      # print STDERR
     }
   }
   $t_exhaustive = gettimeofday() - $t_start;
@@ -172,8 +168,9 @@ use Genotype;
     }
     print $gtree->as_newick(), "\n\n" if($newick_out);
     push @trees, $gtree;
-    print STDERR "# chunk $i_chunk tree constructed.\n";
+    print STDERR "# chunk $i_chunk tree constructed.\n" if($i_chunk%10 == 0);
   }
+  print STDERR "# trees for all $n_chunks_used chunks constructed.\n";
   $t_treeconstruct = gettimeofday - $t_start;
   ############### trees constructed ###############
 
@@ -207,7 +204,7 @@ use Genotype;
       while (my($mid, $tv) = each %{$Tree_qid_matchidinfosum{$qid}}) {
 	my $xv = $Ex_qid_matchidinfosum{$qid}->{$mid} // undef;
 	next if(!defined $xv); # since may only be doing exhaustive for a subset, only check those with exhaustive result present.
-	  if(join(";", @$tv) eq join(";", @$xv)){
+	if (join(";", @$tv) eq join(";", @$xv)) {
 	  $trex_agree_count++;
 	} else {
 	  print "match id: $mid  exhaustive: ", join(" ", @$xv), "   tree: ", join(" ", @$tv), " \n";
@@ -234,13 +231,21 @@ use Genotype;
   # report results
   my %quad_count = ();	       #key: '01' <-> est_agmr < a0, agmr > a0
   my $n_agmrs = 0;
-  $t_start = gettimeofday();
+  #$t_start = gettimeofday();
+
+  my $t_agmr = 0;
   while (my($qid, $mid_sums) = each %Tree_qid_matchidinfosum) {
+    my %mid_estagmr = ();
     my $q_sequence = $qid_gtsobj->{$qid}->sequence();
     while (my($mid, $sums) = each %$mid_sums) {
       my $est_agmr = est_agmr($n_chunks_used, $max_mismatches, $min_usable_pairs_to_store, @$sums); #($denom > 0)? $total_mms/$denom : 2;
-
-      #  next if($est_agmr > 0.4);
+      $mid_estagmr{$mid} = $est_agmr;
+      my $est_agmr_a = 0; #est_agmr_a($n_chunks_used, $max_mismatches, $min_usable_pairs_to_store, @$sums); #($denom > 0)? $total_mms/$denom : 2;
+    }
+     $t_start = gettimeofday();
+    while (my($mid, $sums) = each %$mid_sums) {
+     my $est_agmr = $mid_estagmr{$mid};
+      next if($est_agmr > 0.5);
       next if(gsl_rng_uniform($the_rng->raw()) >= $gmr_prob);
 
       my $m_sequence = $id_gtsobj1->{$mid}->sequence();
@@ -249,7 +254,7 @@ use Genotype;
       agmr_C($q_sequence, $m_sequence, $agmr_n, $agmr_d);
       $n_agmrs++;
       my $agmr = ($agmr_d > 0)? $agmr_n/$agmr_d : -1;
-	#	agmr_perl($q_sequence, $m_sequence);
+      # agmr_perl($q_sequence, $m_sequence);
 
       my $hgmr = ($hgmr_d > 0)? $hgmr_n/$hgmr_d : -1;
 
@@ -257,21 +262,30 @@ use Genotype;
       $quad .= ($agmr < 0.15)? '0' : '1';
       $quad_count{$quad}++;
 
-      print  "$qid  $mid   ", join("  ", @$sums), "   $est_agmr $agmr  $hgmr \n"
+      print  "$qid  $mid   ", join("  ", @$sums), "   $est_agmr  $agmr  $hgmr \n";
     }
+    $t_agmr += gettimeofday() - $t_start;
+      # 	my @sorted_matchids = sort {$mid_estagmr{$a} <=> $mid_estagmr{$b}} keys %mid_estagmr;
+      # print STDERR "$qid    ";
+      # for (@sorted_matchids[0..4]){
+      # 	print STDERR "$_ ", $mid_estagmr{$_}, "  ";
+      # }print STDERR "\n";
+    
   }
-  $t_compare = gettimeofday() - $t_start;
+ # $t_compare = gettimeofday() - $t_start;
   while (my($k, $v) = each %quad_count) {
     print STDERR "$k  $v \n";
   }
 
-  printf(STDERR "#      input   n gobjs: db %10i  query: %5i   time %10.3f sec.\n", $n_db, $n_query, $t_readin);
-  printf(STDERR "#   treeless   n compare:  %10i                 time %10.3f \n", $n_compare_exh, $t_exhaustive);
-  printf(STDERR "# treeconstr   n constr:   %10i                 time %10.3f \n", scalar @trees, $t_treeconstruct);
-  printf(STDERR "# treesearch   n compare:  %10i                 time %10.3f \n", $n_compare_tree, $t_treesearch);
-  printf(STDERR "#  true agmr   n agmrs:    %10i                 time %10.3f \n", $n_agmrs, $t_compare);
-  printf(STDERR "#      check   %5i of %5i agree.\n",  $total_trex_agree_count, $total_trex_agree_count+$total_trex_disagree_count);
-} # end main
+  my $timing_string = '';
+  $timing_string .= sprintf("#      input   n gobjs: db %10i  query: %5i   time %10.3f sec.\n", $n_db, $n_query, $t_readin);
+  $timing_string .= sprintf("#   treeless   n compare:  %10i                 time %10.3f  %10.4f\n", $n_compare_exh, $t_exhaustive, 1000*$t_exhaustive/($n_compare_exh/$n_chunks_used));
+  $timing_string .= sprintf("# treeconstr   n constr:   %10i                 time %10.3f \n", scalar @trees, $t_treeconstruct);
+  $timing_string .= sprintf("# treesearch   n compare:  %10i                 time %10.3f  %10.4f\n", $n_compare_tree, $t_treesearch, 1000*$t_treesearch/($n_compare_tree/$n_chunks_used));
+  $timing_string .= sprintf("#  true agmr   n agmrs:    %10i                 time %10.3f  %10.4f\n", $n_agmrs, $t_agmr, 1000*$t_agmr/$n_agmrs);
+  $timing_string .= sprintf("#      check   %5i of %5i agree.\n",  $total_trex_agree_count, $total_trex_agree_count+$total_trex_disagree_count);
+  print $timing_string, "\n";
+}				# end main
 
 
 ####  ############### subroutines ################## ####
@@ -284,7 +298,26 @@ sub est_agmr{
   my $n_stored_chunks = shift;
   my $n_unstored_chunks = $n_chunks_used - $n_stored_chunks;
   my $total_mms = $total_stored_mms + $n_unstored_chunks*$max_mismatches;
-  my $denom = $n_usable_compared + $n_unstored_chunks*($min_usable_pairs_to_store-1);
+  my $denom = $n_usable_compared + 0.5*$n_unstored_chunks*($min_usable_pairs_to_store); #-1);
+  my $est_agmr = ($denom > 0)? $total_mms/$denom : 2;
+  return $est_agmr;
+}
+
+sub est_agmr_a{
+  my $n_chunks_used = shift;	# L
+  my $max_mismatches = shift;
+  my $min_usable_pairs_to_store = shift; # k0
+  my $total_stored_mms = shift;
+  my $n_usable_compared = shift;
+  my $n_stored_chunks = shift;				     # L>
+  my $n_unstored_chunks = $n_chunks_used - $n_stored_chunks; # L<
+  my $total_mms = $total_stored_mms + $n_unstored_chunks*$max_mismatches;
+  my ($L, $k0, $Lge) = ($n_chunks_used, $min_usable_pairs_to_store, $n_stored_chunks);
+  my $denom = $n_usable_compared;
+  if ($L > $Lge) {
+    my $xi = $Lge/$L;
+    $denom += ($L-$Lge)*(1/(1 - $xi**($k0-1)) - ($k0-1)*$xi/(1 - $xi));
+  }
   my $est_agmr = ($denom > 0)? $total_mms/$denom : 2;
   return $est_agmr;
 }
@@ -499,35 +532,35 @@ sub exhaustive_search_1query{
     # my $sequence1 = $db_gt_obj->get_chunk($index_arrayref);
     my $mid =  $db_gts_obj->id();
     if (gsl_rng_uniform($rng->raw()) < $prob) {
-      for my $index_arrayref (@$chunk_index_arrayrefs){
-	 my $q_sequence = $q_gts_obj->get_chunk($index_arrayref); # $chunk_index_arrayrefs[0]);
-      my ($n_pairs_compared, $n_usable_pairs_compared, $mismatch_count) = (0, 0, 0);
-      #GenotypeTreeNode::
-      count_mismatches_C(
-					     $db_gts_obj->get_chunk($index_arrayref),
-					     $q_sequence,
-					     # $sequence1,
-					     # $sequence2,
-					     $max_mismatches, 0,
-					     $n_pairs_compared, $n_usable_pairs_compared, $mismatch_count);
+      for my $index_arrayref (@$chunk_index_arrayrefs) {
+	my $q_sequence = $q_gts_obj->get_chunk($index_arrayref); # $chunk_index_arrayrefs[0]);
+	my ($n_pairs_compared, $n_usable_pairs_compared, $mismatch_count) = (0, 0, 0);
+	#GenotypeTreeNode::
+	count_mismatches_C(
+			   $db_gts_obj->get_chunk($index_arrayref),
+			   $q_sequence,
+			   # $sequence1,
+			   # $sequence2,
+			   $max_mismatches, 0,
+			   $n_pairs_compared, $n_usable_pairs_compared, $mismatch_count);
 
-      if ($n_usable_pairs_compared >= $min_to_store) {
-	$mid_matchinfo{$mid} = [$mismatch_count, $n_usable_pairs_compared];
-	if (1) {
-	  if (!exists $mid_matchinfosum->{$mid}) {
-	    $mid_matchinfosum->{$mid} = [$mismatch_count, $n_usable_pairs_compared, 1];
-	  } else {
-	    #      print STDERR "ref mid_matchinfosum:  ", ref $mid_matchinfosum, "\n";
-	    #            print STDERR "ref mid_matchinfosum->[mid]:  ", ref $mid_matchinfosum->{$mid}, "\n";
+	if ($n_usable_pairs_compared >= $min_to_store) {
+	  $mid_matchinfo{$mid} = [$mismatch_count, $n_usable_pairs_compared];
+	  if (1) {
+	    if (!exists $mid_matchinfosum->{$mid}) {
+	      $mid_matchinfosum->{$mid} = [$mismatch_count, $n_usable_pairs_compared, 1];
+	    } else {
+	      #      print STDERR "ref mid_matchinfosum:  ", ref $mid_matchinfosum, "\n";
+	      #            print STDERR "ref mid_matchinfosum->[mid]:  ", ref $mid_matchinfosum->{$mid}, "\n";
 
-	    $mid_matchinfosum->{$mid}->[0] += $mismatch_count;
-	    $mid_matchinfosum->{$mid}->[1] += $n_usable_pairs_compared;
-	    $mid_matchinfosum->{$mid}->[2]++;
+	      $mid_matchinfosum->{$mid}->[0] += $mismatch_count;
+	      $mid_matchinfosum->{$mid}->[1] += $n_usable_pairs_compared;
+	      $mid_matchinfosum->{$mid}->[2]++;
+	    }
 	  }
 	}
+	$count++;
       }
-      $count++;
-       }
     }
   }
   return ($count, \%mid_matchinfo);
