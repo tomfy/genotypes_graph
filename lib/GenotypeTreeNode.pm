@@ -1,6 +1,6 @@
 package GenotypeTreeNode;
-#use Moose;
-use Mouse;
+use Moose;
+#use Mouse;
 use namespace::autoclean;
 use Carp::Assert;
 use List::Util qw ( min max sum );
@@ -149,9 +149,11 @@ sub search_recursive{
     ($n_characters, $n_usable_pairs_to_limit, $mismatch_count) =
       count_mismatches_perl($gt1s, $gt2s, $max_mismatch_count, $mismatch_count);
   } else {		    # using C count mismatches between strings
-    count_mismatches_C($gt1s, $gt2s, $max_mismatch_count, $mismatch_count, $n_characters, $n_usable_pairs_to_limit, $mismatch_count);
+      count_mismatches_C($gt1s, $gt2s, $max_mismatch_count, $mismatch_count, $n_characters, $n_usable_pairs_to_limit, $mismatch_count);
+    
   }
-
+#    print STDERR "n_characters: $n_characters \n";
+#  print STDERR "gt1s gt2s:  $gt1s  $gt2s \n";
   if ($n_characters < $L1) {	# this branch is ruled out.
     if ( (my $n_usable_to_reach_max_mismatch_count = $n_usable_pairs_above + $n_usable_pairs_to_limit) >= $min_to_store) {
       for my $mid (@{$self->ids()}) {
@@ -164,7 +166,7 @@ sub search_recursive{
 	}
       }
     }
-  } else {
+  } else { # not ruled out (yet anyway)
     assert ($n_characters == $L1) if DEBUG; # ok so far, now examine children if any.
     if ($L2 == $L1) {	 # moment of truth - this must be a leaf node.
       # these differ by fewer than $max_mismatch_count!
@@ -179,6 +181,7 @@ sub search_recursive{
 	  }
 	}
       }
+      
     } elsif ($L2 > $L1) {	# Ok so far, but must look further ...
       substr($gt2s, 0, $n_characters, ''); # delete the first $n_characters of $gt2s
       while ( my ($gh, $child) = each %{ $self->children() }) {
@@ -306,7 +309,8 @@ sub id_as_string{
   return join(',', @{$self->ids()});
 }
 
-sub count_mismatches_perl{
+sub count_mismatches_perl{ # counts the number characters before the number mismatches equals $max_mismatches
+    # so, if $max_mismatches is 0, and no missing data, then 
   my $str1 = shift;
   my $str2 = shift;
   my $max_mismatches = shift;

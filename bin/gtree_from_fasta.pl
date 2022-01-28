@@ -5,7 +5,7 @@ use List::Util qw (min max sum shuffle);
 use Getopt::Long;
 use Time::HiRes qw( gettimeofday );
 use lib '/home/tomfy/Orthologger/lib/';
-use TomfyMisc qw ' fasta2seqon1line ';
+# use TomfyMisc qw ' fasta2seqon1line ';
 use constant MISSING_DATA => 'X';
 use Math::GSL::RNG  qw( :all );
 use Inline C => '../lib/inlinec.c';
@@ -34,7 +34,7 @@ use Genotype;
   my $rng_seed = undef;
   my $p_missing = 0; # replace genotypes with MISSING_DATA with this probability
   my $query_fasta = undef;	# query genotype sets fasta file.
-  my $max_mismatches = 0;
+  my $max_mismatches = 1;
   my $error_prob = 0;	    # add errors to data with this probability
   my $chunk_size = 100000000;
   my $n_chunks = 1;
@@ -154,7 +154,7 @@ use Genotype;
   #### end of exhaustive search ####
 
  
-  ########### for each chunk, construct tree, search tree to matches to queries,  #########
+  ########### for each chunk, construct tree, search tree to find matches to queries,  #########
 
   my ($t_treeconstruct, $t_treesearch, $t_check) = (0, 0, 0);
 
@@ -179,16 +179,24 @@ use Genotype;
   #my %tree_qid_results = ();
   my %Tree_qid_matchidinfosum = (); 
   my $n_compare_tree = 0;
-
+#  print "XXXXXXX\n";
   while (my ($qid, $q_gtsobj) = each %$qid_gtsobj) {
-    my $tr_mid_matchinfosum = {};
-    while (my ($i_chunk, $chunk_indices) = each @chunk_index_arrayrefs) {
-      ########## search in tree for matches to sequences from $query_fasta file ####
+      my $tr_mid_matchinfosum = {};
+      # print "qid: $qid \n";
+      while (my ($i_chunk, $chunk_indices) = each @chunk_index_arrayrefs) {
+	  #print "$i_chunk \n";
+	########## search in tree for matches to sequences from $query_fasta file ####
       my $gtree = $trees[$i_chunk];
       my %qid_matchidinfo = ();
       $gtree->search($q_gtsobj, $chunk_indices, $max_mismatches, $min_usable_pairs_to_store, $tr_mid_matchinfosum);
-      $n_compare_tree += $n_db;
+	  $n_compare_tree += $n_db;
+	  #print "ZZZZ:  [", scalar keys %$tr_mid_matchinfosum, "]\n";
     }
+
+#    while(my($k, $v) = each %{$tr_mid_matchinfosum}){
+#	print STDERR "qid: $qid mid: $k   ", join(", ", @$v), "\n";
+#    }
+    
     $Tree_qid_matchidinfosum{$qid} = $tr_mid_matchinfosum;
   }
   $t_treesearch += gettimeofday() - $t_start;
@@ -276,13 +284,14 @@ use Genotype;
   while (my($k, $v) = each %quad_count) {
     print STDERR "$k  $v \n";
   }
-
+  print "n_compare_exh: $n_compare_exh  \n";
+  print "n_compare_tree: $n_compare_tree  n_chunks_used: $n_chunks_used \n";
   my $timing_string = '';
   $timing_string .= sprintf("#      input   n gobjs: db %10i  query: %5i   time %10.3f sec.\n", $n_db, $n_query, $t_readin);
-  $timing_string .= sprintf("#   treeless   n compare:  %10i                 time %10.3f  %10.4f\n", $n_compare_exh, $t_exhaustive, 1000*$t_exhaustive/($n_compare_exh/$n_chunks_used));
+  $timing_string .= sprintf("#   treeless   n compare:  %10i                 time %10.3f  %10.4f\n", $n_compare_exh, $t_exhaustive, ($n_compare_exh>0)? 1000*$t_exhaustive/($n_compare_exh/$n_chunks_used) : -1);
   $timing_string .= sprintf("# treeconstr   n constr:   %10i                 time %10.3f \n", scalar @trees, $t_treeconstruct);
   $timing_string .= sprintf("# treesearch   n compare:  %10i                 time %10.3f  %10.4f\n", $n_compare_tree, $t_treesearch, 1000*$t_treesearch/($n_compare_tree/$n_chunks_used));
-  $timing_string .= sprintf("#  true agmr   n agmrs:    %10i                 time %10.3f  %10.4f\n", $n_agmrs, $t_agmr, 1000*$t_agmr/$n_agmrs);
+  $timing_string .= sprintf("#  true agmr   n agmrs:    %10i                 time %10.3f  %10.4f\n", $n_agmrs, $t_agmr, 1000*(($n_agmrs > 0)? $t_agmr/$n_agmrs : -1.0));
   $timing_string .= sprintf("#      check   %5i of %5i agree.\n",  $total_trex_agree_count, $total_trex_agree_count+$total_trex_disagree_count);
   print $timing_string, "\n";
 }				# end main
@@ -458,7 +467,8 @@ sub read_genotypes_from_fasta{ # read fasta with genotype sequences. return an a
   my %count_errors = ();
   my %id_gtsobj = ();
   my $sequence_length = undef;
-  my @fasta_lines = split ("\n", TomfyMisc::fasta2seqon1line($input_string));
+  # my @fasta_lines = split ("\n", TomfyMisc::fasta2seqon1line($input_string));
+  my @fasta_lines = split("\n", $input_string);
   while (@fasta_lines) {
     my $line = shift @fasta_lines;
     next if($line =~ /^\s*#/);	# skip comment lines
